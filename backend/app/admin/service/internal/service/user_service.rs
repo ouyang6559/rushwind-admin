@@ -10,6 +10,8 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
 };
 
+use crate::data::repos::UserRepo;
+use crate::data::scope::Viewer;
 use crate::state::{
     db_err, internal_error, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
@@ -27,6 +29,12 @@ pub struct UserService {
 }
 
 impl UserService {
+    /// The viewer-driven repo: tenancy predicates live in the repo, not here.
+    #[allow(dead_code)] // staged for the remaining method migrations
+    fn repo<'a>(&'a self, ctx: &rushwind_http_binding::ctx::RequestContext) -> UserRepo<'a> {
+        UserRepo::new(&self.state.db, Viewer::from_ctx(ctx))
+    }
+
     async fn find_by_username(
         &self,
         tenant_id: u32,

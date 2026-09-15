@@ -524,6 +524,31 @@ P4 收尾/验收                                    █████  (2-3M)
 >   "app/admin/service", "pkg/*", "testbed/admin-diff"]；CI fmt 门 4 包；21 个
 >   引用文件 sed 换线（admin_proto::/admin_gen:: → admin_api::）。四门绿
 >   （26 项测试 + sync-protos 契约门）。
+> - **会话八（服务层实现，2026-09-15）**：41/41 服务全部真实实现（零 null 桩）。
+>   鉴权链 1:1：AES-128-CBC 前端密码（`f51d66a73d8a0927`，IV=密钥）+ bcrypt（恒时
+>   假校验防枚举）+ 登录限流（5 次/15min，IP+用户名 Lua 原子）+ 验证码（6 位无歧义
+>   字符集 + Redis 10min + PNG 渲染）+ 租户解析/登录策略（黑 CIDR/时间窗/设备）+
+>   标识符反查（email/mobile）→ RS256 令牌对（UUIDv7 jti）+ Redis `at/rt/us:{ct}:
+>   {uid}:{jti}` 白名单 + 刷新 Lua"验证即吊销"轮换 + HttpOnly cookie 对 + MFA
+>   TOTP（SHA1/6 位/30s/±1，`enc:` AES-GCM 密文落库）+ AK/SK（SHA-256 恒时比对，
+>   机器令牌）。服务面：用户/角色/菜单/接口（SyncApis 从 **内嵌 OpenAPI 资产**
+>   `cmd/server/assets/openapi.yaml` 重建）/权限（SyncPermissions 菜单→权限码推
+>   导）/租户（WithAdmin 事务开通）/门户/个人资料/字典×3/组织（物化路径子树迁
+>   移）/职位/套餐×3/配置/登录策略/在线会话（Redis 扫描）/6 类审计查询/dashboard/
+>   监控×2/脚本×2/通知渠道/任务（5 类注册类型 + ControlTask 按类型名）/消息×3
+>   （收件箱 + SSE 推送）/文件×2（50MiB + MIME 白名单 + sha256 + 本地对象镜像）。
+>   **data 层**：`internal/data/scope.rs`（Viewer：Noop/User/System 三态，对位
+>   TenantPrivacy/EnforceTenant——租户判定收敛 repo，不再散落服务）+
+>   `internal/data/repos/`（20 个仓储文件，一仓一文件对位 `*_repo.go`，
+>   `paged_list` 对齐 PagingRequest）。**审计写入中间件**（audit.rs，对位
+>   `pkg/middleware/logging`）：login（含风控引擎 FAILED+50/未知用户+10/20/
+>   缺设备+10/缺 IP+5/内网−10，LOW/MEDIUM/HIGH）/api（跳过 Login+VerifyMFA）/
+>   operation（仅写方法 + sessionOnlyOperations 跳过）/permission（target/action
+>   解析 + body 目标名提取）；64KiB 请求体快照重建、request-id 三级回退。
+>   **SSE :7789**（sse_server.rs）：token 三来源（Authorization/X-Token/?token=）
+>   + `?stream=userId` 防跨订阅 + notification 事件（id=GUIDv4）；与 REST 同一
+>   生命周期双 server。**配置驱动**：server.yaml（rest.addr/timeout/cors 全块 +
+>   sse.addr/path）解析进 Config，rest_server/main 全部吃配置。
 > - **下一步**（优先级序）：差分复跑确认 Fail=0——台架已建成（backend/testbed
 >   docker-compose 双后端回放 + admin-diff 归一比较器 + 豁免集引用 operator-matrix
 >   §5；run-2 分布 202 Ok / 2 根因消解 / 90 豁免 / 9 Pending，见会话七⑤；go 容器

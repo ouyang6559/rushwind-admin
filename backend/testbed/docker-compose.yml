@@ -24,11 +24,11 @@ services:
     networks:
       - diff-tier
     environment:
-      # go 后端 data.yaml 的 DSN 写死 port=15432（go 仓同款部署形状）。
-      - POSTGRESQL_PORT_NUMBER=15432
+      # go 后端 data.yaml 的 DSN 写死 port=5432（go 仓同款部署形状）。
+      - POSTGRESQL_PORT_NUMBER=5432
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=*Abcd123456
-      - POSTGRES_DB=gwa
+      - POSTGRES_DB=rushwind_admin
     ulimits:
       nofile:
         soft: 65535

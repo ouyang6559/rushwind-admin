@@ -19,6 +19,8 @@ pub struct AppState {
     /// The mint engine (private key) — RS256, the reference keypair.
     pub jwt: rushwind_authn_jwt::JwtAuthenticator,
     pub tokens: TokenStore,
+    /// The SSE notification hub (`/events` subscribers).
+    pub hub: crate::sse_server::Hub,
 }
 
 impl AppState {
@@ -73,6 +75,7 @@ impl AppState {
             authenticator,
             jwt,
             tokens,
+            hub: crate::sse_server::Hub::default(),
         })
     }
 }
@@ -90,6 +93,11 @@ pub fn status_error(
 /// The Unknown branch: 500 + empty reason (`errors.FromError`).
 pub fn internal_error(message: impl Into<String>) -> rushwind_http_binding::envelope::StatusError {
     rushwind_http_binding::envelope::StatusError::new(500, "", message)
+}
+
+/// The missing-identity error for service-side operator extraction.
+pub fn operator_missing() -> StatusError {
+    status_error("UNAUTHORIZED", "missing identity")
 }
 
 pub type StatusError = rushwind_http_binding::envelope::StatusError;

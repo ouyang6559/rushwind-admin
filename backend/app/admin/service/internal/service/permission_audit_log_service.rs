@@ -1,0 +1,92 @@
+//! PermissionAuditLogService — List/Get over `sys_permission_audit_logs`
+//! (the reference permission_audit_log_service.go).
+
+use std::sync::Arc;
+
+use sea_orm::EntityTrait;
+
+use crate::state::{db_err, not_found, AppState, StatusError};
+use admin_api::proto::audit::service::v1::{
+    GetPermissionAuditLogRequest, ListPermissionAuditLogResponse, PermissionAuditLog,
+};
+use admin_api::proto::pagination::PagingRequest;
+
+fn log_proto(r: crate::data::audit::sys_permission_audit_logs::Model) -> PermissionAuditLog {
+    PermissionAuditLog {
+        id: Some(r.id),
+        tenant_id: r.tenant_id,
+        operator_id: r.operator_id,
+        operator_name: r.operator_name,
+        target_type: r.target_type,
+        target_id: r.target_id,
+        target_name: r.target_name,
+        action: r.action.as_deref().map(|s| match s {
+            "GRANT" => 0,
+            "REVOKE" => 1,
+            "UPDATE" => 2,
+            "RESET" => 3,
+            "CREATE" => 4,
+            "DELETE" => 5,
+            "ASSIGN" => 6,
+            "UNASSIGN" => 7,
+            "BULK_GRANT" => 8,
+            "BULK_REVOKE" => 9,
+            "EXPIRE" => 10,
+            "SUSPEND" => 11,
+            "RESUME" => 12,
+            "ROLLBACK" => 13,
+            "OTHER" => 15,
+            _ => 14,
+        }),
+        old_value: r.old_value.as_ref().map(|v| v.to_string()),
+        new_value: r.new_value.as_ref().map(|v| v.to_string()),
+        ip_address: r.ip_address,
+        request_id: r.request_id,
+        reason: r.reason,
+        log_hash: r.log_hash,
+        signature: r.signature,
+        created_at: r.created_at.and_then(crate::state::naive_to_ts),
+    }
+}
+
+pub struct PermissionAuditLogService {
+    pub state: Arc<AppState>,
+}
+
+#[async_trait::async_trait]
+impl admin_api::gen::services::PermissionAuditLogServiceHandlers for PermissionAuditLogService {
+    async fn list(
+        &self,
+        _ctx: rushwind_http_binding::ctx::RequestContext,
+        req: PagingRequest,
+    ) -> Result<ListPermissionAuditLogResponse, StatusError> {
+        let repo = crate::data::repos::AuditRepo::new(&self.state.db);
+        let (rows, total) = repo.paged_permission(&req).await?;
+        Ok(ListPermissionAuditLogResponse {
+            items: rows.into_iter().map(log_proto).collect(),
+            total,
+        })
+    }
+
+    async fn get(
+        &self,
+        _ctx: rushwind_http_binding::ctx::RequestContext,
+        req: GetPermissionAuditLogRequest,
+    ) -> Result<PermissionAuditLog, StatusError> {
+        let Some(
+            admin_api::proto::audit::service::v1::get_permission_audit_log_request::QueryBy::Id(id),
+        ) = req.query_by
+        else {
+            return Err(crate::state::status_error(
+                "BAD_REQUEST",
+                "query_by required",
+            ));
+        };
+        let row = crate::data::audit::sys_permission_audit_logs::Entity::find_by_id(id)
+            .one(&self.state.db)
+            .await
+            .map_err(db_err)?
+            .ok_or_else(|| not_found("permission audit log"))?;
+        Ok(log_proto(row))
+    }
+}

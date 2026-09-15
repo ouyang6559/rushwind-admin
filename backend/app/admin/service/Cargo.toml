@@ -21,7 +21,7 @@ rushwind-http-binding = { path = "../../../../../rushwind/crates/rushwind-http-b
 rushwind-transport = { path = "../../../../../rushwind/crates/rushwind-transport" }
 rushwind-transport-axum = { path = "../../../../../rushwind/crates/rushwind-transport-axum" }
 rushwind-core = { path = "../../../../../rushwind/crates/rushwind-core" }
-axum = { version = "0.8", default-features = false }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "json"] }
 tokio = { workspace = true }
 sea-orm = { workspace = true }
 redis = { workspace = true }
@@ -42,6 +42,7 @@ base64 = { workspace = true }
 pbjson-types = { workspace = true }
 rust-utils = { workspace = true }
 captcha = { workspace = true }
+futures-util = { workspace = true }
 qrcode = "0.14"
 hex = { workspace = true }
 async-trait = { workspace = true }

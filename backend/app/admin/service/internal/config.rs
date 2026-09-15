@@ -8,6 +8,16 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// The REST listener address (`server.rest.addr`, ":7788" form).
+    pub rest_addr: String,
+    pub rest_timeout_secs: u64,
+    pub cors_allow_credentials: bool,
+    pub cors_headers: Vec<String>,
+    pub cors_methods: Vec<String>,
+    pub cors_origins: Vec<String>,
+    pub sse_addr: String,
+    #[allow(dead_code)] // the events path lands with the SSE handler query surface
+    pub sse_path: String,
     pub database_source: String,
     #[allow(dead_code)] // golden-DDL pipeline switch (storage phase)
     pub database_migrate: bool,
@@ -94,6 +104,47 @@ struct JwtSection {
 }
 
 #[derive(Debug, Deserialize)]
+struct ServerFile {
+    server: Option<ServerSection>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ServerSection {
+    rest: Option<RestSection>,
+    sse: Option<SseSection>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct RestSection {
+    #[serde(default)]
+    addr: String,
+    #[serde(default)]
+    timeout: String,
+    #[serde(default)]
+    cors: Option<CorsSection>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct CorsSection {
+    #[serde(default)]
+    allow_credentials: bool,
+    #[serde(default)]
+    headers: Vec<String>,
+    #[serde(default)]
+    methods: Vec<String>,
+    #[serde(default)]
+    origins: Vec<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct SseSection {
+    #[serde(default)]
+    addr: String,
+    #[serde(default)]
+    path: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct OssFile {
     oss: Option<OssSection>,
 }
@@ -163,6 +214,19 @@ impl Config {
         let oss: OssFile =
             serde_yaml::from_str(&read_repo_file("configs/oss.yaml").unwrap_or_default())
                 .unwrap_or(OssFile { oss: None });
+        let server: ServerFile =
+            serde_yaml::from_str(&read_repo_file("configs/server.yaml").unwrap_or_default())
+                .unwrap_or(ServerFile { server: None });
+        let server_section = server.server.unwrap_or_default();
+        let rest_section = server_section.rest.unwrap_or(RestSection {
+            addr: ":7788".into(),
+            timeout: String::new(),
+            cors: None,
+        });
+        let sse_section = server_section.sse.unwrap_or(SseSection {
+            addr: ":7789".into(),
+            path: "/events".into(),
+        });
 
         let data_section = data.data.unwrap_or_default();
         let database = data_section.database.unwrap_or_default();
@@ -208,6 +272,32 @@ impl Config {
                 .or_else(|| non_empty(jwt.public_key.clone())),
             access_token_expires_secs,
             refresh_token_expires_secs,
+            rest_addr: rest_section.addr.clone(),
+            rest_timeout_secs: parse_go_duration(&rest_section.timeout)
+                .map(|s| s as u64)
+                .unwrap_or(10),
+            cors_allow_credentials: rest_section
+                .cors
+                .as_ref()
+                .map(|c| c.allow_credentials)
+                .unwrap_or(false),
+            cors_headers: rest_section
+                .cors
+                .as_ref()
+                .map(|c| c.headers.clone())
+                .unwrap_or_default(),
+            cors_methods: rest_section
+                .cors
+                .as_ref()
+                .map(|c| c.methods.clone())
+                .unwrap_or_default(),
+            cors_origins: rest_section
+                .cors
+                .as_ref()
+                .map(|c| c.origins.clone())
+                .unwrap_or_default(),
+            sse_addr: sse_section.addr.clone(),
+            sse_path: sse_section.path.clone(),
             oss: (!minio.endpoint.is_empty()).then_some(OssConfig {
                 endpoint: minio.endpoint,
                 upload_host: minio.upload,

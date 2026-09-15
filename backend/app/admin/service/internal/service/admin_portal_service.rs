@@ -120,7 +120,7 @@ pub fn user_to_proto(user: crate::data::sys_users::Model, role_codes: Vec<String
 }
 
 /// entity jsonb (protojson keys) → MenuMeta proto.
-fn menu_meta_from_json(
+pub fn menu_meta_from_json(
     value: &serde_json::Value,
 ) -> Option<admin_api::proto::permission::service::v1::MenuMeta> {
     let obj = value.as_object()?;
@@ -160,6 +160,61 @@ fn menu_meta_from_json(
         order: i32_at("order"),
         title: str_at("title"),
     })
+}
+
+/// MenuMeta proto → the jsonb shape (protojson camelCase keys).
+pub fn menu_meta_to_json(
+    meta: &admin_api::proto::permission::service::v1::MenuMeta,
+) -> serde_json::Value {
+    let mut obj = serde_json::Map::new();
+    let put_str =
+        |obj: &mut serde_json::Map<String, serde_json::Value>, key: &str, v: &Option<String>| {
+            if let Some(v) = v {
+                obj.insert(key.to_string(), serde_json::Value::String(v.clone()));
+            }
+        };
+    let put_bool =
+        |obj: &mut serde_json::Map<String, serde_json::Value>, key: &str, v: Option<bool>| {
+            if let Some(v) = v {
+                obj.insert(key.to_string(), serde_json::Value::Bool(v));
+            }
+        };
+    let put_i32 =
+        |obj: &mut serde_json::Map<String, serde_json::Value>, key: &str, v: Option<i32>| {
+            if let Some(v) = v {
+                obj.insert(key.to_string(), serde_json::json!(v));
+            }
+        };
+    put_str(&mut obj, "activeIcon", &meta.active_icon);
+    put_str(&mut obj, "activePath", &meta.active_path);
+    put_bool(&mut obj, "affixTab", meta.affix_tab);
+    put_i32(&mut obj, "affixTabOrder", meta.affix_tab_order);
+    if !meta.authority.is_empty() {
+        obj.insert("authority".into(), serde_json::json!(meta.authority));
+    }
+    put_str(&mut obj, "badge", &meta.badge);
+    put_str(&mut obj, "badgeType", &meta.badge_type);
+    put_str(&mut obj, "badgeVariants", &meta.badge_variants);
+    put_bool(&mut obj, "hideChildrenInMenu", meta.hide_children_in_menu);
+    put_bool(&mut obj, "hideInBreadcrumb", meta.hide_in_breadcrumb);
+    put_bool(&mut obj, "hideInMenu", meta.hide_in_menu);
+    put_bool(&mut obj, "hideInTab", meta.hide_in_tab);
+    put_str(&mut obj, "icon", &meta.icon);
+    put_str(&mut obj, "iframeSrc", &meta.iframe_src);
+    put_bool(&mut obj, "ignoreAccess", meta.ignore_access);
+    put_bool(&mut obj, "keepAlive", meta.keep_alive);
+    put_str(&mut obj, "link", &meta.link);
+    put_bool(&mut obj, "loaded", meta.loaded);
+    put_i32(&mut obj, "maxNumOfOpenTab", meta.max_num_of_open_tab);
+    put_bool(
+        &mut obj,
+        "menuVisibleWithForbidden",
+        meta.menu_visible_with_forbidden,
+    );
+    put_bool(&mut obj, "openInNewWindow", meta.open_in_new_window);
+    put_i32(&mut obj, "order", meta.order);
+    put_str(&mut obj, "title", &meta.title);
+    serde_json::Value::Object(obj)
 }
 
 impl AdminPortalService {

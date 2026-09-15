@@ -20,7 +20,6 @@ use pbjson_types::Empty;
 use crate::state::{internal_error, status_error, AppState};
 use crate::token::{new_jwt_id, UserTokenPayload};
 use rushwind_authn::Authenticator as _;
-use sea_orm::PaginatorTrait;
 
 pub struct AccessKeyService {
     pub state: Arc<AppState>,
@@ -65,28 +64,16 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListAccessKeyResponse, crate::state::StatusError> {
-        let payload = ctx
+        let _payload = ctx
             .claims
             .as_ref()
             .and_then(UserTokenPayload::from_claims)
             .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))?;
-        let base = crate::data::sys_access_keys::Entity::find()
-            .filter(crate::data::sys_access_keys::Column::TenantId.eq(payload.tenant_id));
-        let (paged, paging) = crate::paging::apply(base, &req);
-        let rows = paged
-            .all(&self.state.db)
-            .await
-            .map_err(|e| internal_error(format!("db: {e}")))?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            let (count_select, _) = crate::paging::apply(
-                crate::data::sys_access_keys::Entity::find()
-                    .filter(crate::data::sys_access_keys::Column::TenantId.eq(payload.tenant_id)),
-                &req,
-            );
-            count_select.count(&self.state.db).await.unwrap_or(0)
-        };
+        let repo = crate::data::repos::AccessKeyRepo::new(
+            &self.state.db,
+            crate::data::scope::Viewer::from_ctx(&ctx),
+        );
+        let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListAccessKeyResponse {
             items: rows.into_iter().map(|r| self.to_proto(r)).collect(),
             total,

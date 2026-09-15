@@ -4,9 +4,7 @@
 
 use std::sync::Arc;
 
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
 use admin_api::proto::config::service::v1::{
@@ -62,18 +60,11 @@ impl admin_api::gen::services::ConfigServiceHandlers for ConfigService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListConfigResponse, StatusError> {
-        let base = crate::data::sys_configs::Entity::find()
-            .order_by_asc(crate::data::sys_configs::Column::Id);
-        let (paged, paging) = crate::paging::apply(base, &req);
-        let rows = paged.all(&self.state.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            crate::data::sys_configs::Entity::find()
-                .count(&self.state.db)
-                .await
-                .unwrap_or(0)
-        };
+        let repo = crate::data::repos::ConfigRepo::new(
+            &self.state.db,
+            crate::data::scope::Viewer::system(),
+        );
+        let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListConfigResponse {
             items: rows.into_iter().map(config_proto).collect(),
             total,

@@ -18,6 +18,9 @@ pub use identity::*;
 pub use misc::*;
 pub use rbac::*;
 
+pub mod repos;
+pub mod scope;
+
 /// `time.Now()` — wall clock, matching the reference's time.Time columns.
 pub fn now() -> chrono::NaiveDateTime {
     chrono::Local::now().naive_local()

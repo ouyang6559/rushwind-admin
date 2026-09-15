@@ -3,9 +3,7 @@
 
 use std::sync::Arc;
 
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
 use admin_api::proto::dict::service::v1::{
@@ -44,18 +42,11 @@ impl admin_api::gen::services::LanguageServiceHandlers for LanguageService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListLanguageResponse, StatusError> {
-        let base = crate::data::sys_languages::Entity::find()
-            .order_by_asc(crate::data::sys_languages::Column::SortOrder);
-        let (paged, paging) = crate::paging::apply(base, &req);
-        let rows = paged.all(&self.state.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            crate::data::sys_languages::Entity::find()
-                .count(&self.state.db)
-                .await
-                .unwrap_or(0)
-        };
+        let repo = crate::data::repos::LanguageRepo::new(
+            &self.state.db,
+            crate::data::scope::Viewer::system(),
+        );
+        let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListLanguageResponse {
             items: rows.into_iter().map(language_proto).collect(),
             total,

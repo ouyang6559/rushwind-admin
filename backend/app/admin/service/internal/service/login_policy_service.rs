@@ -4,9 +4,7 @@
 
 use std::sync::Arc;
 
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
 use admin_api::proto::authentication::service::v1::{
@@ -82,21 +80,11 @@ impl admin_api::gen::services::LoginPolicyServiceHandlers for LoginPolicyService
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListLoginPolicyResponse, StatusError> {
-        let tid = crate::state::tenant_of(&ctx);
-        let base = crate::data::sys_login_policies::Entity::find()
-            .filter(crate::data::sys_login_policies::Column::TenantId.eq(tid))
-            .order_by_asc(crate::data::sys_login_policies::Column::Id);
-        let (paged, paging) = crate::paging::apply(base, &req);
-        let rows = paged.all(&self.state.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            crate::data::sys_login_policies::Entity::find()
-                .filter(crate::data::sys_login_policies::Column::TenantId.eq(tid))
-                .count(&self.state.db)
-                .await
-                .unwrap_or(0)
-        };
+        let repo = crate::data::repos::LoginPolicyRepo::new(
+            &self.state.db,
+            crate::data::scope::Viewer::from_ctx(&ctx),
+        );
+        let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListLoginPolicyResponse {
             items: rows.into_iter().map(policy_proto).collect(),
             total,

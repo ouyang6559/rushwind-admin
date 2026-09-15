@@ -6,10 +6,10 @@
 use std::sync::Arc;
 
 use sea_orm::sea_query::Condition;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
+use crate::data::repos::RoleRepo;
+use crate::data::scope::Viewer;
 use crate::state::{
     db_err, internal_error, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
@@ -237,21 +237,9 @@ impl admin_api::gen::services::RoleServiceHandlers for RoleService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListRoleResponse, StatusError> {
-        let tid = tenant_of(&ctx);
-        let base = crate::data::sys_roles::Entity::find()
-            .filter(crate::data::sys_roles::Column::TenantId.eq(tid))
-            .order_by_asc(crate::data::sys_roles::Column::SortOrder);
-        let (paged, paging) = crate::paging::apply(base, &req);
-        let rows = paged.all(&self.state.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            crate::data::sys_roles::Entity::find()
-                .filter(crate::data::sys_roles::Column::TenantId.eq(tid))
-                .count(&self.state.db)
-                .await
-                .unwrap_or(0)
-        };
+        // Listing rides the repo: tenancy predicates live in the data layer.
+        let repo = RoleRepo::new(&self.state.db, Viewer::from_ctx(&ctx));
+        let (rows, total) = repo.paged_list(&req).await?;
         let mut items = Vec::with_capacity(rows.len());
         for r in rows {
             items.push(role_proto(&self.state, r).await);

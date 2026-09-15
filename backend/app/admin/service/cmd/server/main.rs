@@ -3,6 +3,10 @@
 //! the real service layer, and serves REST :7788. SSE (:7789) lands with
 //! the notification phase.
 
+#[path = "assets_embed.rs"]
+mod assets;
+#[path = "../../internal/audit.rs"]
+mod audit;
 #[path = "../../internal/captcha.rs"]
 mod captcha;
 #[path = "../../internal/config.rs"]
@@ -19,10 +23,14 @@ mod policy;
 mod ratelimit;
 #[path = "../../internal/server/rest_server.rs"]
 mod rest_server;
+#[path = "../../internal/scheduler.rs"]
+mod scheduler;
 #[path = "../../internal/seed.rs"]
 mod seed;
 #[path = "../../internal/service/mod.rs"]
 mod service;
+#[path = "../../internal/server/sse_server.rs"]
+mod sse_server;
 #[path = "../../internal/state.rs"]
 mod state;
 #[path = "../../internal/token.rs"]
@@ -70,18 +78,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(AppState::connect(cfg, Arc::clone(&authenticator)).await?);
     seed::run(&state).await;
 
-    let app = rest_server::build_router(state);
+    // The periodic task scheduler (the asynq-equivalent in-process loop):
+    // enabled PERIODIC rows + the two system crons fire on cron match.
+    {
+        let sched_state = Arc::clone(&state);
+        tokio::spawn(async move { scheduler::run(sched_state).await });
+    }
 
-    // The reference rest.addr ":7788" — every interface.
-    let server = AxumServer::new(std::net::SocketAddr::from(([0, 0, 0, 0], 7788)), app)?;
+    let app = rest_server::build_router(Arc::clone(&state));
+
+    // Listener addresses ride server.yaml (`server.rest.addr` /
+    // `server.sse.addr`, ":7788" host-any form).
+    let rest_addr = parse_addr(&state.cfg.rest_addr, 7788);
+    let sse_addr = parse_addr(&state.cfg.sse_addr, 7789);
+
+    // NewSseServer — a proper transport server registered into the same
+    // lifecycle as REST, so both start and shut down together.
+    let sse_server = sse_server::new_sse_server(Arc::clone(&state), sse_addr)
+        .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+
+    let server = AxumServer::new(rest_addr, app)?;
     let lifecycle = App::builder()
         .name("admin")
         .version("0.1.0")
         .server(Arc::new(server))
+        .server(Arc::new(sse_server))
         .build();
     // The lifecycle owns the OS-signal shutdown path internally; the
     // external signal here stays unfired.
     let external = StopSignal::new();
     lifecycle.run(external).await?;
     Ok(())
+}
+
+/// Parses the yaml `":7788"` host-any form (host omitted → all
+/// interfaces); a bare port or missing value falls back to the default.
+fn parse_addr(addr: &str, default_port: u16) -> std::net::SocketAddr {
+    use std::net::SocketAddr;
+    let addr = addr.trim();
+    if let Some(port_text) = addr.strip_prefix(':') {
+        if let Ok(port) = port_text.parse::<u16>() {
+            return SocketAddr::from(([0, 0, 0, 0], port));
+        }
+    }
+    addr.parse()
+        .unwrap_or(SocketAddr::from(([0, 0, 0, 0], default_port)))
 }

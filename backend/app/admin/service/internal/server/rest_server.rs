@@ -26,9 +26,16 @@ use std::sync::Arc;
 use axum::routing::MethodRouter;
 
 use crate::service::{
-    AccessKeyService, AdminPortalService, AuthenticationService, ConfigService, DictEntryService,
-    DictTypeService, LanguageService, LoginPolicyService, MfaService, PermissionGroupService,
-    RoleService, UserProfileService, UserService,
+    AccessKeyService, AdminPortalService, ApiAuditLogService, ApiService, AuthenticationService,
+    ConfigService, DashboardService, DataAccessAuditLogService, DictEntryService, DictTypeService,
+    FileService, FileTransferService, InternalMessageCategoryService,
+    InternalMessageRecipientService, InternalMessageService, LanguageService, LoginAuditLogService,
+    LoginPolicyService, MenuService, MfaService, NotificationChannelService, OnlineSessionService,
+    OperationAuditLogService, OrgUnitService, PermissionAuditLogService, PermissionGroupService,
+    PermissionService, PlanModuleService, PlanQuotaService, PlanService,
+    PolicyEvaluationLogService, PositionService, RedisCacheMonitorService, RoleService,
+    ScriptLogService, ScriptService, ServerMonitorService, TaskService, TenantService,
+    UserProfileService, UserService,
 };
 use crate::state::AppState;
 use admin_api::pool;
@@ -98,13 +105,17 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     (router_pub, router_gate) = admin_api::gen::mounts::mount_api_audit_log_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_api_audit_log_service(),
+        Arc::new(ApiAuditLogService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_api_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_api_service(),
+        Arc::new(ApiService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_authentication_service(
@@ -126,13 +137,17 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     (router_pub, router_gate) = admin_api::gen::mounts::mount_dashboard_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_dashboard_service(),
+        Arc::new(DashboardService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_data_access_audit_log_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_data_access_audit_log_service(),
+        Arc::new(DataAccessAuditLogService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_dict_entry_service(
@@ -154,31 +169,41 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     (router_pub, router_gate) = admin_api::gen::mounts::mount_file_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_file_service(),
+        Arc::new(FileService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_file_transfer_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_file_transfer_service(),
+        Arc::new(FileTransferService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_internal_message_category_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_internal_message_category_service(),
+        Arc::new(InternalMessageCategoryService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_internal_message_recipient_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_internal_message_recipient_service(),
+        Arc::new(InternalMessageRecipientService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_internal_message_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_internal_message_service(),
+        Arc::new(InternalMessageService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_language_service(
@@ -192,7 +217,9 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     (router_pub, router_gate) = admin_api::gen::mounts::mount_login_audit_log_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_login_audit_log_service(),
+        Arc::new(LoginAuditLogService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_login_policy_service(
@@ -206,7 +233,9 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     (router_pub, router_gate) = admin_api::gen::mounts::mount_menu_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_menu_service(),
+        Arc::new(MenuService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_mfa_service(
@@ -220,31 +249,41 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     (router_pub, router_gate) = admin_api::gen::mounts::mount_notification_channel_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_notification_channel_service(),
+        Arc::new(NotificationChannelService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_online_session_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_online_session_service(),
+        Arc::new(OnlineSessionService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_operation_audit_log_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_operation_audit_log_service(),
+        Arc::new(OperationAuditLogService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_org_unit_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_org_unit_service(),
+        Arc::new(OrgUnitService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_permission_audit_log_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_permission_audit_log_service(),
+        Arc::new(PermissionAuditLogService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_permission_group_service(
@@ -258,43 +297,57 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     (router_pub, router_gate) = admin_api::gen::mounts::mount_permission_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_permission_service(),
+        Arc::new(PermissionService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_plan_module_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_plan_module_service(),
+        Arc::new(PlanModuleService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_plan_quota_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_plan_quota_service(),
+        Arc::new(PlanQuotaService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_plan_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_plan_service(),
+        Arc::new(PlanService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_policy_evaluation_log_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_policy_evaluation_log_service(),
+        Arc::new(PolicyEvaluationLogService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_position_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_position_service(),
+        Arc::new(PositionService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_redis_cache_monitor_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_redis_cache_monitor_service(),
+        Arc::new(RedisCacheMonitorService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_role_service(
@@ -308,31 +361,41 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     (router_pub, router_gate) = admin_api::gen::mounts::mount_script_log_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_script_log_service(),
+        Arc::new(ScriptLogService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_script_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_script_service(),
+        Arc::new(ScriptService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_server_monitor_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_server_monitor_service(),
+        Arc::new(ServerMonitorService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_task_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_task_service(),
+        Arc::new(TaskService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_tenant_service(
         router_pub,
         router_gate,
-        admin_api::gen::nulls::null_tenant_service(),
+        Arc::new(TenantService {
+            state: Arc::clone(&state),
+        }),
         &wrap,
     );
     (router_pub, router_gate) = admin_api::gen::mounts::mount_user_profile_service(
@@ -353,34 +416,34 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     );
     let app = router_pub.merge(router_gate);
 
+    // The audit-write layer (the reference applogging.Server wrapper):
+    // post-handler persistence into the audit tables, outermost so it
+    // sees final status codes.
+    let app = app.layer(axum::middleware::from_fn_with_state(
+        Arc::clone(&state),
+        crate::audit::layer,
+    ));
+
     // The reference's CORS policy and request budget, mirrored verbatim
     // from server.yaml's rest block: credentialed responses (the
     // refresh-token cookie), the six methods, the six headers, the three
     // frontend domains plus the local dev ports.
-    let cors = CorsOptions::default()
-        .with_allow_credentials(true)
-        .with_allow_method("GET")
-        .with_allow_method("POST")
-        .with_allow_method("PUT")
-        .with_allow_method("DELETE")
-        .with_allow_method("HEAD")
-        .with_allow_method("OPTIONS")
-        .with_allow_header("X-Requested-With")
-        .with_allow_header("X-Request-ID")
-        .with_allow_header("Content-Type")
-        .with_allow_header("Authorization")
-        .with_allow_header("X-Captcha-Id")
-        .with_allow_header("X-Captcha-Value")
-        .with_allow_origin("https://vben.admin.gowind.cloud")
-        .with_allow_origin("https://ele.admin.gowind.cloud")
-        .with_allow_origin("https://react.admin.gowind.cloud")
-        .with_allow_origin("http://localhost:5666")
-        .with_allow_origin("http://localhost:5777")
-        .with_allow_origin("http://localhost:5888")
-        .with_allow_origin("http://localhost:5667")
-        .with_allow_origin("http://localhost:5778");
+    // The CORS policy and request budget ride server.yaml's rest block
+    // (parsed in config.rs) — never hardcoded.
+    let mut cors = CorsOptions::default().with_allow_credentials(state.cfg.cors_allow_credentials);
+    for method in &state.cfg.cors_methods {
+        cors = cors.with_allow_method(method.as_str());
+    }
+    for header_name in &state.cfg.cors_headers {
+        cors = cors.with_allow_header(header_name.as_str());
+    }
+    for origin in &state.cfg.cors_origins {
+        cors = cors.with_allow_origin(origin.as_str());
+    }
     HttpEdge::new()
         .with_cors_compat(cors)
-        .with_timeout(std::time::Duration::from_secs(10))
+        .with_timeout(std::time::Duration::from_secs(
+            state.cfg.rest_timeout_secs.max(1),
+        ))
         .wrap(app)
 }

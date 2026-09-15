@@ -1,0 +1,542 @@
+//! The audit-write layer — the port of `pkg/middleware/logging` (the
+//! applogging.Server wrapper): post-handler persistence into the six
+//! audit tables.
+//!
+//! Trigger rules (logging.go):
+//! * login audit — Login / VerifyMFAChallenge / Logout operations only,
+//!   with the stateless risk heuristics (login_audit_log.go:222-393);
+//! * api audit — every request except Login / VerifyMFAChallenge;
+//! * operation audit — write methods only, session-maintenance
+//!   operations skipped (`sessionOnlyOperations`);
+//! * permission audit — write methods only, same session skips, target
+//!   from the operation's service part, action from the method part.
+//!
+//! The JWT is parsed from the bearer token directly (the reference
+//! `extractAuthToken` path) so the outer layer needs no inner state.
+//! Audit failures never break the response.
+
+use std::sync::Arc;
+
+use axum::extract::State;
+use axum::http::{header, Method, Request, StatusCode};
+use axum::middleware::Next;
+use axum::response::Response;
+use sea_orm::ActiveModelTrait;
+use sea_orm::Set;
+
+use crate::state::AppState;
+
+/// `sessionOnlyOperations` (logging.go:25-30).
+const SESSION_ONLY: &[&str] = &[
+    "/admin.service.v1.AuthenticationService/Login",
+    "/admin.service.v1.AuthenticationService/RefreshToken",
+    "/admin.service.v1.AuthenticationService/Logout",
+    "/admin.service.v1.MfaService/VerifyMFAChallenge",
+];
+
+const LOGIN_OPS: &[&str] = &[
+    "/admin.service.v1.AuthenticationService/Login",
+    "/admin.service.v1.MfaService/VerifyMFAChallenge",
+    "/admin.service.v1.AuthenticationService/Logout",
+];
+
+const SKIP_API_AUDIT: &[&str] = &[
+    "/admin.service.v1.AuthenticationService/Login",
+    "/admin.service.v1.MfaService/VerifyMFAChallenge",
+];
+
+const WRITE_METHODS: &[&str] = &["POST", "PUT", "PATCH", "DELETE"];
+
+const MAX_BODY_SNAPSHOT: usize = 64 << 10;
+
+/// Matches a concrete request path against a route template (`{var}`
+/// segments match any non-empty segment).
+fn path_matches(template: &str, path: &str) -> bool {
+    let t: Vec<&str> = template.split('/').filter(|s| !s.is_empty()).collect();
+    let p: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    if t.len() != p.len() {
+        return false;
+    }
+    t.iter()
+        .zip(p.iter())
+        .all(|(tt, pp)| tt.starts_with('{') || tt == pp)
+}
+
+/// Resolves the operation id by matching the static route table.
+fn resolve_operation(method: &Method, path: &str) -> &'static str {
+    for spec in admin_api::gen::routes::ROUTES {
+        if spec.method == method.as_str() && path_matches(spec.path, path) {
+            return spec.operation_id;
+        }
+    }
+    ""
+}
+
+fn client_ip(headers: &axum::http::HeaderMap) -> String {
+    for key in ["x-forwarded-for", "x-real-ip"] {
+        if let Some(v) = headers.get(key).and_then(|v| v.to_str().ok()) {
+            let first = v.split(',').next().unwrap_or("").trim();
+            if !first.is_empty() {
+                return first.to_string();
+            }
+        }
+    }
+    String::new()
+}
+
+fn request_id(headers: &axum::http::HeaderMap) -> String {
+    for key in ["x-request-id", "x-correlation-id", "x-fc-request-id"] {
+        if let Some(v) = headers.get(key).and_then(|v| v.to_str().ok()) {
+            if !v.is_empty() {
+                return v.to_string();
+            }
+        }
+    }
+    uuid::Uuid::new_v4().to_string()
+}
+
+/// Decodes the bearer JWT payload without re-verification — attribution
+/// only (gated routes already verified it inside the gate).
+fn claims_from_token(headers: &axum::http::HeaderMap) -> Option<(u32, u32, String)> {
+    use base64::Engine as _;
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| {
+            v.strip_prefix("Bearer ")
+                .or_else(|| v.strip_prefix("bearer "))
+        })?;
+    let payload_b64 = token.split('.').nth(1)?;
+    let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload_b64)
+        .ok()?;
+    let claims: serde_json::Value =
+        serde_json::from_str(std::str::from_utf8(&payload).ok()?).ok()?;
+    let uid = claims.get("uid")?.as_u64()? as u32;
+    let tid = claims.get("tid").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+    let username = claims
+        .get("sub")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    Some((uid, tid, username))
+}
+
+fn is_private_ip(ip: &str) -> bool {
+    let octets: Vec<u8> = ip
+        .trim()
+        .split('.')
+        .filter_map(|p| p.parse().ok())
+        .collect();
+    if octets.len() == 4 {
+        let (a, b) = (octets[0], octets[1]);
+        return a == 10
+            || a == 127
+            || (a == 172 && (16..=31).contains(&b))
+            || (a == 192 && b == 168)
+            || (a == 169 && b == 254);
+    }
+    ip.starts_with("[::1]") || ip == "::1" || ip.starts_with("fc") || ip.starts_with("fd")
+}
+
+/// The first non-empty name-ish field from the JSON body's `data` object
+/// (permission audit target name).
+fn target_name_from_body(body: &Option<String>) -> Option<String> {
+    let body = body.as_ref()?;
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    let data = value.get("data").unwrap_or(&value);
+    for key in ["name", "title", "username", "nickname", "realname", "code"] {
+        if let Some(name) = data.get(key).and_then(|v| v.as_str()) {
+            if !name.is_empty() {
+                return Some(name.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Username extraction for login audits: JSON body first, then the
+/// X-Audit-Username response header (set by the MFA handler).
+fn login_username(body: &Option<String>, audit_header: &str) -> String {
+    if let Some(body) = body {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(body) {
+            if let Some(name) = value.get("username").and_then(|v| v.as_str()) {
+                return name.to_string();
+            }
+        }
+    }
+    audit_header.to_string()
+}
+
+/// computeRiskScore (login_audit_log.go:222-262).
+fn risk_score(failed: bool, user_id: u32, username: &str, ip: &str, has_device: bool) -> i32 {
+    let mut score = 0;
+    if failed {
+        score += 50;
+    }
+    if user_id == 0 {
+        score += if username.is_empty() { 20 } else { 10 };
+    }
+    if !has_device {
+        score += 10;
+    }
+    if ip.is_empty() {
+        score += 5;
+    } else if is_private_ip(ip) {
+        score -= 10;
+    }
+    score.clamp(0, 100)
+}
+
+fn risk_level(score: u32) -> &'static str {
+    match score {
+        0..=30 => "LOW",
+        31..=70 => "MEDIUM",
+        _ => "HIGH",
+    }
+}
+
+/// computeRiskFactors (login_audit_log.go:285-380) — dedup + sorted.
+#[allow(clippy::too_many_arguments)]
+fn risk_factors(
+    failed: bool,
+    user_id: u32,
+    username: &str,
+    ip: &str,
+    has_device: bool,
+    mfa_status: &str,
+    failure_reason: &str,
+    request_id: &str,
+    score: u32,
+) -> Vec<String> {
+    let mut set = std::collections::BTreeSet::new();
+    if failed {
+        set.insert("FAILED_LOGIN");
+    }
+    if user_id == 0 {
+        if username.is_empty() {
+            set.insert("ANONYMOUS_LOGIN");
+        } else {
+            set.insert("UNKNOWN_USER");
+        }
+    }
+    if !has_device {
+        set.insert("UNKNOWN_DEVICE");
+    }
+    let mfa = mfa_status.to_uppercase();
+    if mfa.contains("FAILED") {
+        set.insert("MFA_FAILED");
+    }
+    if mfa.contains("UNVERIFY") {
+        set.insert("MFA_UNVERIFIED");
+    }
+    if ip.is_empty() {
+        set.insert("IP_MISSING");
+    } else if is_private_ip(ip) {
+        set.insert("INTERNAL_IP");
+    } else {
+        set.insert("EXTERNAL_IP");
+    }
+    let fr = failure_reason.to_lowercase();
+    if !fr.is_empty() {
+        if fr.contains("password") || fr.contains("pwd") || fr.contains("incorrect") {
+            set.insert("PASSWORD_FAILURE");
+        }
+        if fr.contains("mfa") {
+            set.insert("MFA_FAILURE_REASON");
+        }
+    }
+    set.insert("NO_SESSION");
+    if request_id.is_empty() {
+        set.insert("NO_REQUEST_ID");
+    }
+    match score {
+        71..=100 => {
+            set.insert("HIGH_RISK_SCORE");
+        }
+        31..=70 => {
+            set.insert("MEDIUM_RISK_SCORE");
+        }
+        1..=30 => {
+            set.insert("LOW_RISK_SCORE");
+        }
+        _ => {}
+    }
+    set.into_iter().map(String::from).collect()
+}
+
+/// parseTargetAndAction (permission_audit_log.go:42-74).
+fn parse_target_and_action(operation: &str) -> Option<(String, String)> {
+    let slash = operation.rfind('/')?;
+    if slash == operation.len() - 1 {
+        return None;
+    }
+    let service_part = &operation[..slash];
+    let method = &operation[slash + 1..];
+    let dot = service_part.rfind('.')?;
+    let mut svc = &service_part[dot + 1..];
+    svc = svc.strip_suffix("Service").unwrap_or(svc);
+    let target = svc.to_lowercase();
+    let action = match method {
+        "Create" | "BatchCreate" => "CREATE",
+        "Update" => "UPDATE",
+        "Delete" | "BatchDelete" => "DELETE",
+        "Assign" => "ASSIGN",
+        "Unassign" => "UNASSIGN",
+        _ => "OTHER",
+    };
+    Some((target, action.to_string()))
+}
+
+/// Last purely-numeric path segment (resource id).
+fn last_numeric_segment(path: &str) -> Option<String> {
+    path.split('/')
+        .rev()
+        .find(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))
+        .map(String::from)
+}
+
+/// The axum middleware body.
+pub async fn layer(
+    State(state): State<Arc<AppState>>,
+    req: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
+    let started = std::time::Instant::now();
+
+    let method = req.method().clone();
+    let path = req.uri().path().to_owned();
+    let operation = resolve_operation(&method, &path);
+    let ip = client_ip(req.headers());
+    let user_agent = req
+        .headers()
+        .get(header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+    let referer = req
+        .headers()
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+    let request_id = request_id(req.headers());
+    let claims = claims_from_token(req.headers());
+
+    // Body snapshot: write methods with a JSON content type, ≤ 64 KiB
+    // (snapshotWriteBody). The buffered body rebuilds the request so the
+    // inner chain reads it normally.
+    let is_write = WRITE_METHODS.contains(&method.as_str());
+    let is_json = req
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.to_lowercase().contains("application/json"));
+    let mut body: Option<String> = None;
+    let req = if is_write && is_json {
+        let (parts, body_body) = req.into_parts();
+        let bytes = axum::body::to_bytes(body_body, MAX_BODY_SNAPSHOT)
+            .await
+            .unwrap_or_default();
+        if !bytes.is_empty() {
+            body = String::from_utf8(bytes.to_vec()).ok();
+        }
+        Request::from_parts(parts, axum::body::Body::from(bytes))
+    } else {
+        req
+    };
+
+    let response = next.run(req).await;
+
+    let latency_ms = started.elapsed().as_millis() as u32;
+    let success = response.status() == StatusCode::OK;
+    let status_code = response.status().as_u16() as u32;
+    // The MFA handler's attribution header — read before the response
+    // moves into the return.
+    let audit_username_header = response
+        .headers()
+        .get("x-audit-username")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+
+    // Audit writes are best-effort; failures never break the response.
+    let db = state.db.clone();
+    tokio::spawn(async move {
+        let uid = claims.as_ref().map(|c| c.0).unwrap_or(0);
+        let tid = claims.as_ref().map(|c| c.1).unwrap_or(0);
+        let username = claims.as_ref().map(|c| c.2.clone()).unwrap_or_default();
+        let created = crate::data::now();
+
+        // ---- login audit (Login / VerifyMFAChallenge / Logout) ----
+        if LOGIN_OPS.contains(&operation) {
+            let is_logout = operation.ends_with("/Logout");
+            let failed = !success;
+            let login_username = if is_logout {
+                username.clone()
+            } else {
+                login_username(&body, &audit_username_header)
+            };
+            let failure_reason = if failed {
+                Some("login failed".to_string())
+            } else {
+                None
+            };
+            let has_device = !user_agent.is_empty();
+            let score = risk_score(failed, uid, &login_username, &ip, has_device).max(0) as u32;
+            let factors = risk_factors(
+                failed,
+                uid,
+                &login_username,
+                &ip,
+                has_device,
+                "",
+                failure_reason.as_deref().unwrap_or(""),
+                &request_id,
+                score,
+            );
+            let row = crate::data::audit::sys_login_audit_logs::ActiveModel {
+                tenant_id: Set(Some(tid)),
+                user_id: Set(Some(uid)),
+                username: Set(Some(login_username.clone())),
+                ip_address: Set(Some(ip.clone())),
+                request_id: Set(Some(request_id.clone())),
+                action_type: Set(Some(if is_logout {
+                    "LOGOUT".into()
+                } else {
+                    "LOGIN".into()
+                })),
+                status: Set(Some(if failed {
+                    "FAILED".into()
+                } else {
+                    "SUCCESS".into()
+                })),
+                failure_reason: Set(failure_reason),
+                login_method: Set(Some("PASSWORD".into())),
+                risk_score: Set(Some(score)),
+                risk_level: Set(Some(risk_level(score).into())),
+                risk_factors: Set(Some(serde_json::Value::Array(
+                    factors
+                        .iter()
+                        .map(|f| serde_json::Value::String(f.clone()))
+                        .collect(),
+                ))),
+                created_at: Set(Some(created)),
+                ..Default::default()
+            }
+            .insert(&db)
+            .await;
+            if row.is_err() {
+                eprintln!("[audit] login log insert failed");
+            }
+        }
+
+        // ---- api audit (all except Login / VerifyMFAChallenge) ----
+        if !SKIP_API_AUDIT.contains(&operation) {
+            let row = crate::data::audit::sys_api_audit_logs::ActiveModel {
+                tenant_id: Set(Some(tid)),
+                user_id: Set(Some(uid)),
+                username: Set(Some(username.clone())),
+                ip_address: Set(Some(ip.clone())),
+                http_method: Set(Some(method.to_string())),
+                path: Set(Some(
+                    operation
+                        .trim_start_matches('/')
+                        .split('/')
+                        .next()
+                        .unwrap_or("")
+                        .to_string(),
+                )),
+                request_uri: Set(Some(path.clone())),
+                api_operation: Set(Some(operation.to_string())),
+                request_id: Set(Some(request_id.clone())),
+                latency_ms: Set(Some(latency_ms)),
+                success: Set(Some(success)),
+                status_code: Set(Some(status_code)),
+                reason: Set((!success).then(|| format!("HTTP {status_code}"))),
+                request_body: Set(body.clone()),
+                referer: Set(Some(referer.clone())),
+                created_at: Set(Some(created)),
+                ..Default::default()
+            }
+            .insert(&db)
+            .await;
+            if row.is_err() {
+                eprintln!("[audit] api log insert failed");
+            }
+        }
+
+        // ---- operation audit (write methods, session ops skipped) ----
+        // ---- permission audit (same skips; target/action parsed) ----
+        if is_write && !SESSION_ONLY.contains(&operation) && !operation.is_empty() {
+            let resource_id = last_numeric_segment(&path);
+            let (target_type, perm_action) =
+                parse_target_and_action(operation).unwrap_or((String::new(), "OTHER".into()));
+
+            // Operation audit: resource type = service minus "Service".
+            let resource_type = operation
+                .trim_start_matches('/')
+                .split('/')
+                .next()
+                .unwrap_or("")
+                .rsplit('.')
+                .next()
+                .unwrap_or("")
+                .strip_suffix("Service")
+                .unwrap_or("")
+                .to_lowercase();
+            if !resource_type.is_empty() {
+                let action = match operation.rsplit('/').next().unwrap_or("") {
+                    "Create" | "BatchCreate" => "CREATE",
+                    "Update" => "UPDATE",
+                    "Delete" | "BatchDelete" => "DELETE",
+                    _ => "OTHER",
+                };
+                let row = crate::data::audit::sys_operation_audit_logs::ActiveModel {
+                    tenant_id: Set(Some(tid)),
+                    user_id: Set(Some(uid)),
+                    username: Set(Some(username.clone())),
+                    resource_type: Set(Some(resource_type.clone())),
+                    resource_id: Set(resource_id.clone()),
+                    action: Set(Some(action.into())),
+                    request_id: Set(Some(request_id.clone())),
+                    success: Set(Some(success)),
+                    failure_reason: Set((!success).then(|| format!("HTTP {status_code}"))),
+                    ip_address: Set(Some(ip.clone())),
+                    created_at: Set(Some(created)),
+                    ..Default::default()
+                }
+                .insert(&db)
+                .await;
+                if row.is_err() {
+                    eprintln!("[audit] operation log insert failed");
+                }
+            }
+
+            // Permission audit: needs a parsed target type.
+            if !target_type.is_empty() {
+                let target_name = target_name_from_body(&body);
+                let row = crate::data::audit::sys_permission_audit_logs::ActiveModel {
+                    tenant_id: Set(Some(tid)),
+                    operator_id: Set(Some(uid)),
+                    operator_name: Set(Some(username.clone())),
+                    target_type: Set(Some(target_type)),
+                    target_id: Set(resource_id),
+                    target_name: Set(target_name),
+                    action: Set(Some(perm_action)),
+                    ip_address: Set(Some(ip.clone())),
+                    request_id: Set(Some(request_id.clone())),
+                    created_at: Set(Some(created)),
+                    ..Default::default()
+                }
+                .insert(&db)
+                .await;
+                if row.is_err() {
+                    eprintln!("[audit] permission log insert failed");
+                }
+            }
+        }
+    });
+
+    response
+}

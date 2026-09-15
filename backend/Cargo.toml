@@ -37,6 +37,10 @@ sha1 = "0.10"
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 # 存储面（版本与 rushwind 工作区一致；with-chrono/with-json 供实体时间戳/JSONB 列）。
+sea-orm-migration = { version = "2.0", default-features = false, features = [
+    "runtime-tokio-rustls",
+    "sqlx-postgres",
+] }
 sea-orm = { version = "2.0", default-features = false, features = [
     "runtime-tokio-rustls",
     "sqlx-postgres",

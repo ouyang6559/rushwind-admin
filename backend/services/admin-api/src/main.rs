@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use admin_api::config::Config;
+use admin_api::migration;
 use admin_api::seed;
 use admin_api::server::{apalis, rest, sse};
 use admin_api::state::AppState;
@@ -31,6 +32,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let authenticator: Arc<dyn rushwind_authn::Authenticator> = Arc::new(verifier);
 
     let state = Arc::new(AppState::connect(cfg, Arc::clone(&authenticator)).await?);
+    if state.cfg.database_migrate {
+        migration::run(&state.db).await?;
+    }
     seed::run(&state).await;
 
     // The task queue transport: apalis Postgres storage + worker,

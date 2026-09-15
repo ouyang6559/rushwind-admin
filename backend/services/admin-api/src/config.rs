@@ -27,7 +27,7 @@ pub struct Config {
     #[allow(dead_code)] // the events path lands with the SSE handler query surface
     pub sse_path: String,
     pub database_source: String,
-    #[allow(dead_code)] // golden-DDL pipeline switch (storage phase)
+    /// Startup gate: run pending schema migrations before seeding.
     pub database_migrate: bool,
     pub redis_addr: String,
     pub redis_password: String,

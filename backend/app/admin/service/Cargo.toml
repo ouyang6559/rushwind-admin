@@ -18,6 +18,8 @@ rushwind-authn = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b8787
 rushwind-authn-jwt = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
 rushwind-http = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
 rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
+rushwind-apalis-postgres = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
+apalis-core = { workspace = true }
 rushwind-transport = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
 rushwind-transport-axum = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
 rushwind-core = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }

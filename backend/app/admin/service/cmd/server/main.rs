@@ -23,8 +23,8 @@ mod policy;
 mod ratelimit;
 #[path = "../../internal/server/rest_server.rs"]
 mod rest_server;
-#[path = "../../internal/scheduler.rs"]
-mod scheduler;
+#[path = "../../internal/server/apalis_server.rs"]
+mod apalis_server;
 #[path = "../../internal/seed.rs"]
 mod seed;
 #[path = "../../internal/service/mod.rs"]
@@ -78,11 +78,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(AppState::connect(cfg, Arc::clone(&authenticator)).await?);
     seed::run(&state).await;
 
-    // The periodic task scheduler (the asynq-equivalent in-process loop):
-    // enabled PERIODIC rows + the two system crons fire on cron match.
+    // The task queue transport (the asynq-equivalent): apalis Postgres
+    // storage + worker, registered into the same lifecycle as REST + SSE.
+    // The scheduler below is the cron producer that enqueues due jobs.
+    let task_server = Arc::new(apalis_server::ApalisServer::new(
+        Arc::clone(&state),
+        &state.cfg.database_source,
+        "default",
+    )?);
+
+    // The periodic cron producer: enabled PERIODIC rows + the two system
+    // crons enqueue jobs on cron match.
+    // The cron producer (the asynq scheduler's job) runs alongside.
     {
         let sched_state = Arc::clone(&state);
-        tokio::spawn(async move { scheduler::run(sched_state).await });
+        let tasks = Arc::clone(&task_server);
+        tokio::spawn(async move { apalis_server::run_cron_producer(sched_state, tasks).await });
     }
 
     let app = rest_server::build_router(Arc::clone(&state));
@@ -103,6 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .version("0.1.0")
         .server(Arc::new(server))
         .server(Arc::new(sse_server))
+        .server(task_server)
         .build();
     // The lifecycle owns the OS-signal shutdown path internally; the
     // external signal here stays unfired.

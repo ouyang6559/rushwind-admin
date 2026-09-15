@@ -26,7 +26,7 @@ rushwind-core = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "json"] }
 tokio = { workspace = true }
 sea-orm = { workspace = true }
-rushwind-storage-seaorm-migration = { git = "https://github.com/tx7do/rushwind", rev = "dcbbf71de729b67ea12965d98782eab5423a091b" }
+rushwind-storage-seaorm-migration = { git = "https://github.com/tx7do/rushwind", rev = "4e222ef91ad347327eb01638d6dba8a0245d2ec8" }
 redis = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

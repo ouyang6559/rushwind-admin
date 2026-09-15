@@ -1,5 +1,5 @@
 //! Captcha — 6-char alphanumeric challenges rendered as PNG:
-//! 6 chars from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, 10-minute TTL,
+//! 6 chars drawn from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, 10-minute TTL,
 //! Redis key `admin:captcha:{id}`, verify-and-delete on match.
 
 use rand::Rng;
@@ -17,13 +17,7 @@ fn captcha_key(id: &str) -> String {
 pub async fn generate(redis: &ConnectionManager) -> Result<(String, String, String), String> {
     let mut conn = redis.clone();
     let id = uuid::Uuid::now_v7().simple().to_string();
-    let chars: String = (0..6)
-        .map(|_| {
-            let idx = rand::rng().random_range(0..CAPTCHA_SOURCE.len());
-            CAPTCHA_SOURCE.as_bytes()[idx] as char
-        })
-        .collect();
-    let b64 = render_png_base64(&chars)?;
+    let (b64, chars) = render_png_base64()?;
     let _: redis::RedisResult<()> = conn
         .set_ex(captcha_key(&id), chars.clone(), CAPTCHA_TTL_SECS)
         .await;
@@ -48,14 +42,19 @@ pub async fn verify(redis: &ConnectionManager, id: &str, value: &str) -> bool {
     }
 }
 
-/// Renders the 6 characters into a noisy PNG, base64-encoded. The
-/// renderer draws a noise-obfuscated string; any legible
-/// PNG matches the wire contract (the image is random per call anyway).
-fn render_png_base64(chars: &str) -> Result<String, String> {
+/// Renders a noisy 6-char PNG; returns (base64 png, answer). The crate
+/// draws its own random picks from the configured alphabet — the answer
+/// is read back off the render, so image and stored answer always agree.
+fn render_png_base64() -> Result<(String, String), String> {
     let mut cap = captcha::Captcha::new();
-    let glyphs: Vec<char> = chars.chars().collect();
+    let glyphs: Vec<char> = CAPTCHA_SOURCE.chars().collect();
     cap.set_chars(&glyphs);
+    cap.add_chars(6);
+    let answer = cap.chars_as_string();
     cap.apply_filter(captcha::filters::Noise::new(0.3));
-    cap.view(240, 80);
-    cap.as_base64().ok_or_else(|| "captcha render".to_string())
+    // Crop to the crate's documented canvas (220x120); larger crops
+    // underflow its centering math.
+    cap.view(220, 120);
+    let b64 = cap.as_base64().ok_or_else(|| "captcha render".to_string())?;
+    Ok((b64, answer))
 }

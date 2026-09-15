@@ -12,14 +12,15 @@ use crate::state::AppState;
 
 const DEFAULT_USER_PASSWORD: &str = "Abcd@1234";
 
-pub async fn run(state: &Arc<AppState>) {
-    let _ = seed_languages(state).await;
-    let _ = seed_configs(state).await;
-    let _ = seed_roles(state).await;
-    let _ = seed_permission_groups(state).await;
-    let _ = seed_permissions(state).await;
-    let _ = seed_menus(state).await;
-    let _ = seed_admin_user(state).await;
+pub async fn run(state: &Arc<AppState>) -> Result<(), String> {
+    seed_languages(state).await?;
+    seed_configs(state).await?;
+    seed_roles(state).await?;
+    seed_permission_groups(state).await?;
+    seed_permissions(state).await?;
+    seed_menus(state).await?;
+    seed_admin_user(state).await?;
+    Ok(())
 }
 
 async fn seed_languages(state: &Arc<AppState>) -> Result<(), String> {

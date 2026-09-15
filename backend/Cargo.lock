@@ -2987,7 +2987,7 @@ source = "git+https://github.com/tx7do/rushwind?rev=8c7a5815ad21625299f95db806b1
 [[package]]
 name = "rushwind-storage-seaorm-migration"
 version = "0.0.1"
-source = "git+https://github.com/tx7do/rushwind?rev=dcbbf71de729b67ea12965d98782eab5423a091b#dcbbf71de729b67ea12965d98782eab5423a091b"
+source = "git+https://github.com/tx7do/rushwind?rev=4e222ef91ad347327eb01638d6dba8a0245d2ec8#4e222ef91ad347327eb01638d6dba8a0245d2ec8"
 dependencies = [
  "sea-orm",
  "sea-orm-migration",

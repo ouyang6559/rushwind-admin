@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if state.cfg.database_migrate {
         migration::run(&state.db).await?;
     }
-    seed::run(&state).await;
+    seed::run(&state).await?;
 
     // The task queue transport: apalis Postgres storage + worker,
     // registered into the same lifecycle as REST + SSE. The scheduler

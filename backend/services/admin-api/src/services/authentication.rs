@@ -39,7 +39,7 @@ pub struct AuthenticationService {
 
 /// The permission code every backend-capable user must hold
 /// (`constants.SystemAccessBackendPermissionCode`).
-const SYSTEM_ACCESS_BACKEND: &str = "system:access_backend";
+const SYSTEM_ACCESS_BACKEND: &str = "sys:access_backend";
 const PLATFORM_ADMIN_ROLE: &str = "platform:admin";
 const TENANT_ADMIN_ROLE: &str = "tenant:manager";
 

@@ -246,7 +246,7 @@ impl proto::gen::services::InternalMessageServiceHandlers for InternalMessageSer
         .map_err(db_err)?;
 
         // Recipients: explicit list (single or multi), else the whole
-        // tenant fan-out (the asynq broadcast rides the scheduler phase;
+        // tenant fan-out (the broadcast rides the scheduler phase;
         // direct fan-out covers the API contract).
         let recipient_ids: Vec<u32> = if !req.target_user_ids.is_empty() {
             req.target_user_ids.clone()

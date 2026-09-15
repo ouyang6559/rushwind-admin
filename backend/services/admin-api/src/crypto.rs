@@ -1,5 +1,5 @@
 //! Credential crypto primitives:
-//! the AES-128-CBC front-end password layer (go-utils/crypto, key
+//! the AES-128-CBC front-end password layer (key
 //! `f51d66a73d8a0927`, IV = the key itself, PKCS#7), bcrypt hashing
 //! (default cost 10), SHA-256 (access-key secrets), AES-256-GCM (MFA
 //! secret at-rest, `enc:` prefix), and RFC 6238 TOTP.
@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 
 type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 
-/// go-utils/crypto DefaultAESKey — 16 bytes, also reused as the IV.
+/// The default AES key — 16 bytes, also reused as the IV.
 pub const DEFAULT_AES_KEY: &[u8; 16] = b"f51d66a73d8a0927";
 
 /// The AES-256-GCM key for `enc:` secrets (MFA factors): derived from
@@ -118,7 +118,7 @@ pub fn decrypt_if_needed(stored: &str) -> Result<String, String> {
 }
 
 /// TOTP verify (RFC 6238, SHA-1, 6 digits, 30 s step, ±1 window) — the
-/// reference's `pquerna/otp` `ValidateCustom` parameters.
+/// `ValidateCustom`-shaped validation parameters.
 pub fn totp_verify(secret_base32: &str, code: &str) -> bool {
     if code.len() != 6 || !code.bytes().all(|b| b.is_ascii_digit()) {
         return false;

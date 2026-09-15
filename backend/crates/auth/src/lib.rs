@@ -1,4 +1,4 @@
-//! The auth gate for the protected subtree — //! `pkg/middleware/auth` middleware.
+//! The auth gate for the protected subtree.
 //!
 //! Two-stage validation:
 //! `TokenChecker.IsValidAccessToken` → `Authenticator.Authenticate(ACCESS)`:
@@ -12,7 +12,7 @@
 //! that text).
 //!
 //! Success inserts the claim bag into the request extensions — the
-//! reference middleware's context injection — consumed by the glue into
+//! request-context injection — consumed by the glue into
 //! the per-request [`rushwind_http_binding::ctx::RequestContext`].
 
 use std::sync::Arc;
@@ -59,7 +59,7 @@ pub async fn auth_gate(
         .collect();
     match auth.authenticate(&headers) {
         Ok(claims) => {
-            // The reference's second stage: whitelist + blacklist.
+            // The second stage: whitelist + blacklist.
             let uid = claims
                 .0
                 .get("uid")

@@ -10,8 +10,7 @@
 //! * [`gen`] — the build-time-emitted surface (the framework's
 //!   `rushwind-gen-http` over the annotated closure): route table with
 //!   form-binding plans, reason → HTTP status error tables, one service
-//!   trait per annotated BFF service (the Go `<Service>HTTPServer`
-//!   interfaces 1:1), null placeholder impls, and the public/gated mount
+//!   trait per annotated BFF service, null placeholder impls, and the public/gated mount
 //!   emitters split by [`AUTH_FREE`].
 //! * [`tables`] — handwritten accessors over the generated error tables.
 //!

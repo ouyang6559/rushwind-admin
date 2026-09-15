@@ -195,7 +195,7 @@ pub fn publish_recipient(hub: &Hub, payload: &NotificationPayload) {
 #[allow(dead_code)]
 fn _claims_shape(_: &UserTokenPayload) {}
 
-/// NewSseServer — assembles the `/events` router into a transport server
+/// Assembles the `/events` router into a transport server
 /// bound to `server.sse.addr` (default :7789), registered into the same
 /// lifecycle as REST.
 pub fn new_sse_server(

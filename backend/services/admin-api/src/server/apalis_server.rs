@@ -177,7 +177,7 @@ impl Server for ApalisServer {
 }
 
 // ---------------------------------------------------------------------------
-// The cron producer — the asynq scheduler's job: static system crons are
+// The cron producer: static system crons are
 // registered directly; the DB-driven PERIODIC rows ride a wildcard job
 // whose handler scans `sys_tasks` each minute, matches specs, dedupes by
 // type name across tenants, and enqueues.

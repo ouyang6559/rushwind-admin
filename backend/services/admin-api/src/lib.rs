@@ -14,6 +14,6 @@ pub mod policy;
 pub mod ratelimit;
 pub mod seed;
 pub mod server;
-pub mod service;
+pub mod services;
 pub mod state;
 pub mod token;

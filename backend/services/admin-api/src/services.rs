@@ -1,0 +1,74 @@
+//! The service layer — one module per proto service, each implementing
+//! its generated Handlers trait against the shared [`crate::state::AppState`]
+
+pub mod access_key;
+pub mod admin_portal;
+pub mod api;
+pub mod api_audit_log;
+pub mod authentication;
+pub mod config;
+pub mod dashboard;
+pub mod data_access_audit_log;
+pub mod dict_entry;
+pub mod dict_type;
+pub mod file;
+pub mod internal_message;
+pub mod language;
+pub mod login_audit_log;
+pub mod login_policy;
+pub mod menu;
+pub mod mfa;
+pub mod monitor;
+pub mod notification_channel;
+pub mod online_session;
+pub mod operation_audit_log;
+pub mod org_unit;
+pub mod permission;
+pub mod permission_audit_log;
+pub mod permission_group;
+pub mod plan;
+pub mod policy_evaluation_log;
+pub mod position;
+pub mod role;
+pub mod script;
+pub mod task;
+pub mod tenant;
+pub mod user;
+pub mod user_profile;
+
+pub use access_key::AccessKeyService;
+pub use admin_portal::AdminPortalService;
+pub use api::ApiService;
+pub use api_audit_log::ApiAuditLogService;
+pub use authentication::AuthenticationService;
+pub use config::ConfigService;
+pub use dashboard::DashboardService;
+pub use data_access_audit_log::DataAccessAuditLogService;
+pub use dict_entry::DictEntryService;
+pub use dict_type::DictTypeService;
+pub use file::{FileService, FileTransferService};
+pub use internal_message::{
+    InternalMessageCategoryService, InternalMessageRecipientService, InternalMessageService,
+};
+pub use language::LanguageService;
+pub use login_audit_log::LoginAuditLogService;
+pub use login_policy::LoginPolicyService;
+pub use menu::MenuService;
+pub use mfa::MfaService;
+pub use monitor::{RedisCacheMonitorService, ServerMonitorService};
+pub use notification_channel::NotificationChannelService;
+pub use online_session::OnlineSessionService;
+pub use operation_audit_log::OperationAuditLogService;
+pub use org_unit::OrgUnitService;
+pub use permission::PermissionService;
+pub use permission_audit_log::PermissionAuditLogService;
+pub use permission_group::PermissionGroupService;
+pub use plan::{PlanModuleService, PlanQuotaService, PlanService};
+pub use policy_evaluation_log::PolicyEvaluationLogService;
+pub use position::PositionService;
+pub use role::RoleService;
+pub use script::{ScriptLogService, ScriptService};
+pub use task::TaskService;
+pub use tenant::TenantService;
+pub use user::UserService;
+pub use user_profile::UserProfileService;

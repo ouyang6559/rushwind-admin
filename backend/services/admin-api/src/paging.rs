@@ -1,4 +1,4 @@
-//! PagingRequest → SeaORM select assembly — the go-crud
+//! PagingRequest → SeaORM select assembly — the
 //! paging/filter pipeline: the `query` JSON filter syntax
 //! (rust-utils query_parser, `__`-suffixed operators, snake-cased
 //! fields), the `orderBy` JSON-array string, the page/offset/none paging

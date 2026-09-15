@@ -1,5 +1,4 @@
-//! The viewer context — standalone + go-crud's
-//! `TenantPrivacy` rule. Every repository receives a [`Viewer`] and
+//! The viewer context — the standalone tenancy rule. Every repository receives a [`Viewer`] and
 //! derives its query predicates from it; there is exactly one place that
 //! decides tenancy filtering.
 //!
@@ -9,21 +8,21 @@
 //!   `tenant_id = tid`, creates are force-stamped, cross-tenant writes
 //!   are denied;
 //! * system viewer (startup seeds, token-cleanup jobs): bypasses all
-//!   tenant predicates (`NewSystemViewerContext`).
+//!   tenant predicates.
 
 use rushwind_http_binding::ctx::RequestContext;
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub enum ViewerKind {
-    /// No credentials — `NewNoopContext` (public routes).
+    /// No credentials (public routes).
     Noop,
     /// A verified user context: platform when tenant 0.
     User,
-    /// `NewSystemViewerContext` — bypasses tenancy (seeds, internal jobs).
+    /// Bypasses tenancy (seeds, internal jobs).
     System,
 }
 
-/// The full viewer surface mirrors viewer API; methods a
+/// The full viewer surface; methods a
 /// service has not migrated to yet stay as part of the data-layer API.
 #[allow(dead_code)]
 #[derive(Clone, Debug, Copy)]
@@ -48,7 +47,7 @@ impl Viewer {
         }
     }
 
-    /// The system viewer — `NewSystemViewerContext`.
+    /// The system viewer.
     pub fn system() -> Self {
         Self {
             kind: ViewerKind::System,
@@ -75,7 +74,7 @@ impl Viewer {
         }
     }
 
-    /// `viewer.EnforceTenant` — `Some(tenant)` when rows must be
+    /// Tenant enforcement — `Some(tenant)` when rows must be
     /// constrained, `None` for platform/system/noop wide reads.
     pub fn tenant_scope(&self) -> Option<u32> {
         match self.kind {

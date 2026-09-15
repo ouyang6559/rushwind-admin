@@ -14,7 +14,7 @@ use proto::proto::identity::service::v1::{
     UploadAvatarResponse, User, VerifyContactRequest,
 };
 
-use crate::service::admin_portal_service::{load_user, user_to_proto};
+use crate::services::admin_portal::{load_user, user_to_proto};
 use crate::state::{internal_error, status_error, AppState};
 use crate::token::UserTokenPayload;
 

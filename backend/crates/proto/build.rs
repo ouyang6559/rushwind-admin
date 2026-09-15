@@ -14,7 +14,7 @@
 //!   serialization and form binding. Requires `protoc` on PATH.
 //! * the Rust types — prost + pbjson, from a FILTERED descriptor set built
 //!   by protox: only data-carrying files (the admin contract files, the
-//!   go-crud pagination messages, the well-known types referenced as field
+//!   pagination messages, the well-known types referenced as field
 //!   types). Annotation-only files are removed so prost/pbjson never emit
 //!   types for them (and so `google/protobuf/descriptor.proto` — pulled in
 //!   by the gnostic annotations — never enters type generation, where the
@@ -35,7 +35,7 @@ use protox::prost::Message as _;
 // generator config can consume it).
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/auth_free.rs"));
 
-/// Vendored data-carrying files (the go-crud paging envelope). These are real
+/// Vendored data-carrying files (the paging envelope). These are real
 /// runtime types (List request inputs) and participate in type generation.
 const VENDORED_DATA_FILES: [&str; 1] = ["pagination/v1/pagination.proto"];
 

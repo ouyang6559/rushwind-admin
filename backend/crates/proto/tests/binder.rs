@@ -1,6 +1,6 @@
 //! Binder behavior tests — pin the ported form-decode semantics
 //! (binding-spec §2.2) one by one. These are the Rust-side twins of the
-//! differential corpus the Go backend will replay.
+//! differential corpus replayed by the differential harness.
 
 use prost_reflect::{DescriptorPool, DynamicMessage};
 use rushwind_http_binding::binder::bind_form;

@@ -1,7 +1,7 @@
 //! Corpus guard for the auth-free split.
 //!
 //! The generator classifies every route binding via the auth-free table
-//! (`proto::AUTH_FREE`, the Go `AddWhiteList`). This test pins
+//! (`proto::AUTH_FREE`, the deployment's auth-free set). This test pins
 //! BOTH directions against the live corpus:
 //!
 //! * every whitelisted pair still exists as a route binding — a dropped
@@ -46,7 +46,7 @@ fn auth_free_routes_match_the_go_whitelist() {
 
     assert_eq!(
         public, expected,
-        "the public route set diverged from the Go AddWhiteList"
+        "the public route set diverged from the auth-free set"
     );
     assert_eq!(
         public_bindings,

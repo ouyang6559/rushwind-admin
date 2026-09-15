@@ -1,11 +1,11 @@
 //! The REST server assembly — //! `internal/server/module`: mounts the full route surface with
 //! null placeholder services, splits the auth-free public subtree from
-//! the gated one (`AddWhiteList` set), composes the
+//! the gated one (the auth-free set), composes the
 //! per-route layer stack, merges the two, and applies the HTTP edge.
 //!
 //! Per-route layer composition (the `wrap` closure below): the framework
 //! bind layer — body and query binding — outermost on EVERY route, and
-//! the auth gate (pkg/middleware-auth) composed INSIDE it on gated routes
+//! the auth gate (the auth crate) composed INSIDE it on gated routes
 //! only. That order is the wire contract: codec/binding failures answer
 //! 400 ahead of any 401.
 //!
@@ -13,8 +13,8 @@
 //! storage phase; until then the gate is the protected subtree's only
 //! defense.
 //!
-//! The CORS policy and request budget are mirrored verbatim from the
-//! reference server.yaml `rest` block, through the gorilla-compatible
+//! The CORS policy and request budget are taken verbatim from the
+//! vendored server.yaml `rest` block, through the gorilla-compatible
 //! CORS layer (see rushwind_http::cors_compat — wires
 //! gorilla/handlers there, whose emission rules tower-http does not
 //! reproduce).
@@ -23,7 +23,7 @@ use std::sync::Arc;
 
 use axum::routing::MethodRouter;
 
-use crate::service::{
+use crate::services::{
     AccessKeyService, AdminPortalService, ApiAuditLogService, ApiService, AuthenticationService,
     ConfigService, DashboardService, DataAccessAuditLogService, DictEntryService, DictTypeService,
     FileService, FileTransferService, InternalMessageCategoryService,
@@ -443,7 +443,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         crate::audit::layer,
     ));
 
-    // The CORS policy and request budget, mirrored verbatim
+    // The CORS policy and request budget, taken verbatim
     // from server.yaml's rest block: credentialed responses (the
     // refresh-token cookie), the six methods, the six headers, the three
     // frontend domains plus the local dev ports.

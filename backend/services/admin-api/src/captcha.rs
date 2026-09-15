@@ -49,7 +49,7 @@ pub async fn verify(redis: &ConnectionManager, id: &str, value: &str) -> bool {
 }
 
 /// Renders the 6 characters into a noisy PNG, base64-encoded. The
-/// reference rides base64Captcha's DriverString renderer; any legible
+/// renderer draws a noise-obfuscated string; any legible
 /// PNG matches the wire contract (the image is random per call anyway).
 fn render_png_base64(chars: &str) -> Result<String, String> {
     let mut cap = captcha::Captcha::new();

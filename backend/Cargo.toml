@@ -22,12 +22,12 @@ serde_json = "1"
 prost-reflect = { version = "0.16", features = ["serde"] }
 # 生成器产物中的服务 trait 用 async-trait 保证 dyn 兼容。
 async-trait = "0.1"
-# 管理服务直用的工具链：Django 风格 query 解析（go-utils/query_parser 同源移植）。
+# 管理服务直用的工具链：Django 风格 query 解析。
 rust-utils = { git = "https://github.com/tx7do/rust-utils", rev = "8c24baf4e6ab419621a299a5f18e349562382fca", features = ["json"] }
-# captcha 图像渲染（base64Captcha 的等价渲染面）。
+# captcha 图像渲染。
 captcha = "0.0.9"
 sha1 = "0.10"
-# binder 叶子解码：std base64（Go StdEncoding 同语义）与 RFC3339 时间戳解析。
+# binder 叶子解码：std base64 与 RFC3339 时间戳解析。
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 # 存储面（版本与 rushwind 工作区一致；with-chrono/with-json 供实体时间戳/JSONB 列）。
@@ -41,7 +41,7 @@ sea-orm = { version = "2.0", default-features = false, features = [
 redis = { version = "1", default-features = false, features = ["tokio-comp", "connection-manager", "script"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "net"] }
 futures-util = "0.3"
-# 任务队列（对位 go 的 asynq）：apalis Postgres 后端 + worker runtime 门面。
+# 任务队列：apalis Postgres 后端 + worker runtime 门面。
 rushwind-transport-cron = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
 rushwind-apalis-postgres = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
 apalis-core = { version = "0.7", features = ["json", "sleep"] }

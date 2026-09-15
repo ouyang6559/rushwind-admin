@@ -22,7 +22,7 @@ use proto::proto::identity::service::v1::{
 };
 use proto::proto::pagination::PagingRequest;
 
-use crate::service::admin_portal_service::user_to_proto;
+use crate::services::admin_portal::user_to_proto;
 
 pub struct UserService {
     pub state: Arc<AppState>,
@@ -249,8 +249,7 @@ impl proto::gen::services::UserServiceHandlers for UserService {
             None => None,
         }
         .ok_or_else(|| not_found("user"))?;
-        let (_, codes) =
-            crate::service::admin_portal_service::load_user(&self.state, row.id).await?;
+        let (_, codes) = crate::services::admin_portal::load_user(&self.state, row.id).await?;
         Ok(user_to_proto(row, codes))
     }
 

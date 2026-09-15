@@ -1,5 +1,5 @@
-/// The auth-free operations: the Go `AddWhiteList` registrations in
-/// deployment whitelist (commented-out entries excluded), pinned 1:1 as
+/// The auth-free operations: the deployment's whitelist registrations
+/// (commented-out entries excluded), pinned 1:1 as
 /// (service full name, proto method name) pairs. Consumed by the build
 /// script's generator config (the public/gated mount split) and re-exported
 /// here for the corpus guard test and the differential harness.

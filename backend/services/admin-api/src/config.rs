@@ -1,8 +1,8 @@
-//! Config loading — parses the embedded reference yaml defaults
+//! Config loading — parses the embedded yaml defaults
 //! (`assets/data.yaml`, `assets/auth.yaml`, `assets/oss.yaml`,
 //! `assets/server.yaml`, compiled into the binary) with the same env
-//! overrides honors (`GWA_AUTH_JWT_*`,
-//! plus `GWA_DATABASE_SOURCE` / `GWA_REDIS_ADDR` / `GWA_REDIS_PASSWORD`
+//! overrides honors (`RUSHWIND_AUTH_JWT_*`,
+//! plus `RUSHWIND_DATABASE_SOURCE` / `RUSHWIND_REDIS_ADDR` / `RUSHWIND_REDIS_PASSWORD`
 //! for out-of-container runs).
 
 use serde::Deserialize;
@@ -67,7 +67,7 @@ struct DataSection {
 #[derive(Debug, Default, Deserialize)]
 struct DatabaseSection {
     #[serde(default)]
-    #[allow(dead_code)] // reference auth.yaml parity; source carries the connection
+    #[allow(dead_code)] // auth.yaml parity; the yaml carries the connection
     driver: String,
     #[serde(default)]
     source: String,
@@ -96,7 +96,7 @@ struct AuthnSection {
 #[derive(Debug, Deserialize)]
 struct JwtSection {
     #[serde(default)]
-    #[allow(dead_code)] // mirrored verbatim; RS256 params come from the dedicated keys
+    #[allow(dead_code)] // taken verbatim; RS256 params come from the dedicated keys
     method: String,
     #[serde(default)]
     #[allow(dead_code)]
@@ -240,12 +240,12 @@ impl Config {
 
         // The code defaults : access 15 min,
         // refresh 7 days.
-        let access_token_expires_secs = std::env::var("GWA_ACCESS_TOKEN_EXPIRES_SECS")
+        let access_token_expires_secs = std::env::var("RUSHWIND_ACCESS_TOKEN_EXPIRES_SECS")
             .ok()
             .and_then(|v| v.parse().ok())
             .or_else(|| parse_go_duration(&jwt.access_token_expires).map(|s| s as i64))
             .unwrap_or(900);
-        let refresh_token_expires_secs = std::env::var("GWA_REFRESH_TOKEN_EXPIRES_SECS")
+        let refresh_token_expires_secs = std::env::var("RUSHWIND_REFRESH_TOKEN_EXPIRES_SECS")
             .ok()
             .and_then(|v| v.parse().ok())
             .or_else(|| parse_go_duration(&jwt.refresh_token_expires).map(|s| s as i64))
@@ -254,17 +254,18 @@ impl Config {
         let minio = oss.oss.and_then(|o| o.minio).unwrap_or_default();
 
         Ok(Config {
-            database_source: std::env::var("GWA_DATABASE_SOURCE").unwrap_or(database.source),
-            database_migrate: std::env::var("GWA_DATABASE_MIGRATE")
+            database_source: std::env::var("RUSHWIND_DATABASE_SOURCE").unwrap_or(database.source),
+            database_migrate: std::env::var("RUSHWIND_DATABASE_MIGRATE")
                 .map(|v| v == "true" || v == "1")
                 .unwrap_or(database.migrate),
-            redis_addr: std::env::var("GWA_REDIS_ADDR").unwrap_or(redis_section.addr),
-            redis_password: std::env::var("GWA_REDIS_PASSWORD").unwrap_or(redis_section.password),
-            jwt_private_key: std::env::var("GWA_AUTH_JWT_PRIVATE_KEY")
+            redis_addr: std::env::var("RUSHWIND_REDIS_ADDR").unwrap_or(redis_section.addr),
+            redis_password: std::env::var("RUSHWIND_REDIS_PASSWORD")
+                .unwrap_or(redis_section.password),
+            jwt_private_key: std::env::var("RUSHWIND_AUTH_JWT_PRIVATE_KEY")
                 .ok()
                 .filter(|v| !v.is_empty())
                 .or_else(|| non_empty(jwt.private_key.clone())),
-            jwt_public_key: std::env::var("GWA_AUTH_JWT_PUBLIC_KEY")
+            jwt_public_key: std::env::var("RUSHWIND_AUTH_JWT_PUBLIC_KEY")
                 .ok()
                 .filter(|v| !v.is_empty())
                 .or_else(|| non_empty(jwt.public_key.clone())),

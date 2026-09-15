@@ -19,7 +19,7 @@ impl proto::gen::services::ServerMonitorServiceHandlers for ServerMonitorService
         _ctx: rushwind_http_binding::ctx::RequestContext,
         _req: GetServerMonitorRequest,
     ) -> Result<ServerMonitorInfo, StatusError> {
-        // The Go-runtime section is inherently reference-only; the Rust
+        // The Go-runtime section has no sampler in this process; the Rust
         // process reports what it can observe. Host vitals ride /proc on
         // Linux; the sections stay unset where no sampler exists.
         Ok(ServerMonitorInfo {

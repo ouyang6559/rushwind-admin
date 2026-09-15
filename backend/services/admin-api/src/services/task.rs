@@ -1,5 +1,5 @@
 //! TaskService — service layer:
-//! `sys_tasks` CRUD, the asynq-backed start/stop/restart controls (the
+//! `sys_tasks` CRUD, the queue-backed start/stop/restart controls (the
 //! in-process scheduler phase; row semantics and validations match today),
 //! ListTaskTypeName over the registered handler set, and the bulk
 //! Start/Stop/RestartAll flows.
@@ -19,8 +19,7 @@ use proto::proto::task::service::v1::{
     ListTaskTypeNameResponse, RestartAllTaskResponse, Task, UpdateTaskRequest,
 };
 
-/// The task types registered in asynq server
-/// (module + pkg/task).
+/// The task types registered in the queue server.
 const REGISTERED_TASK_TYPES: &[&str] = &[
     "backup",
     "tenant_expiry_scan",

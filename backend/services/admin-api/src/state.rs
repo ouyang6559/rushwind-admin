@@ -26,7 +26,7 @@ pub struct AppState {
 impl AppState {
     /// Connects Postgres + Redis and builds the JWT engines. `migrate`
     /// wiring (schema bootstrap) is owned by the golden-DDL pipeline; the
-    /// reference DB already carries the schema via its own migration.
+    /// database already carries the schema via its own migration.
     pub async fn connect(
         cfg: Config,
         authenticator: Arc<dyn rushwind_authn::Authenticator>,
@@ -90,7 +90,7 @@ pub fn status_error(
     rushwind_http_binding::envelope::StatusError::new(status, reason, message)
 }
 
-/// The Unknown branch: 500 + empty reason (`errors.FromError`).
+/// The Unknown branch: 500 + empty reason.
 pub fn internal_error(message: impl Into<String>) -> rushwind_http_binding::envelope::StatusError {
     rushwind_http_binding::envelope::StatusError::new(500, "", message)
 }

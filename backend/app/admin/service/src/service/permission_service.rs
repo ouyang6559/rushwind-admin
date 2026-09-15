@@ -368,9 +368,8 @@ impl gen_rust::gen::services::PermissionServiceHandlers for PermissionService {
         req: GetPermissionRequest,
     ) -> Result<Permission, StatusError> {
         let _ = &ctx;
-        let Some(gen_rust::proto::permission::service::v1::get_permission_request::QueryBy::Id(
-            id,
-        )) = req.query_by
+        let Some(gen_rust::proto::permission::service::v1::get_permission_request::QueryBy::Id(id)) =
+            req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
         };
@@ -513,9 +512,9 @@ impl gen_rust::gen::services::PermissionServiceHandlers for PermissionService {
         req: DeletePermissionRequest,
     ) -> Result<Empty, StatusError> {
         let _ = operator_of(&ctx)?;
-        let Some(
-            gen_rust::proto::permission::service::v1::delete_permission_request::QueryBy::Id(id),
-        ) = req.query_by
+        let Some(gen_rust::proto::permission::service::v1::delete_permission_request::QueryBy::Id(
+            id,
+        )) = req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
         };

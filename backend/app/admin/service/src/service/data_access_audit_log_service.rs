@@ -87,9 +87,7 @@ impl gen_rust::gen::services::DataAccessAuditLogServiceHandlers for DataAccessAu
         req: GetDataAccessAuditLogRequest,
     ) -> Result<DataAccessAuditLog, StatusError> {
         let Some(
-            gen_rust::proto::audit::service::v1::get_data_access_audit_log_request::QueryBy::Id(
-                id,
-            ),
+            gen_rust::proto::audit::service::v1::get_data_access_audit_log_request::QueryBy::Id(id),
         ) = req.query_by
         else {
             return Err(crate::state::status_error(

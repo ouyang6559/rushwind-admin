@@ -1,72 +1,25 @@
-//! The admin service entry: loads the vendored reference configs, connects
-//! Postgres + Redis, builds the JWT engines (RS256 verify + mint), wires
-//! the real service layer, and serves REST :7788. SSE (:7789) lands with
-//! the notification phase.
-
-#[path = "assets_embed.rs"]
-mod assets;
-#[path = "../../internal/audit.rs"]
-mod audit;
-#[path = "../../internal/captcha.rs"]
-mod captcha;
-#[path = "../../internal/config.rs"]
-mod config;
-#[path = "../../internal/crypto.rs"]
-mod crypto;
-#[path = "../../internal/data/mod.rs"]
-mod data;
-#[path = "../../internal/paging.rs"]
-mod paging;
-#[path = "../../internal/policy.rs"]
-mod policy;
-#[path = "../../internal/ratelimit.rs"]
-mod ratelimit;
-#[path = "../../internal/server/docs_server.rs"]
-mod docs_server;
-#[path = "../../internal/server/rest_server.rs"]
-mod rest_server;
-#[path = "../../internal/server/apalis_server.rs"]
-mod apalis_server;
-#[path = "../../internal/seed.rs"]
-mod seed;
-#[path = "../../internal/service/mod.rs"]
-mod service;
-#[path = "../../internal/server/sse_server.rs"]
-mod sse_server;
-#[path = "../../internal/state.rs"]
-mod state;
-#[path = "../../internal/token.rs"]
-mod token;
+//! The admin service assembly entry: loads the embedded config defaults
+//! (env overrides win), connects Postgres + Redis, builds the JWT engines
+//! (RS256 verify + mint), wires the service layer, and runs the REST
+//! (:7788), SSE (:7789), and task-queue transports in one lifecycle.
+//! Everything lives in the library crate; this binary only composes it.
 
 use std::sync::Arc;
 
+use admin_service::config::Config;
+use admin_service::seed;
+use admin_service::server::{apalis_server, rest_server, sse_server};
+use admin_service::state::AppState;
 use rushwind_core::App;
 use rushwind_transport::StopSignal;
 use rushwind_transport_axum::AxumServer;
 
-use state::AppState;
-use token::TokenStore;
-
-/// The adapter wiring the service-side Redis session store into the
-/// middleware's server-side check stage.
-struct RedisTokenChecker(TokenStore);
-
-#[async_trait::async_trait]
-impl middleware_auth::AccessTokenChecker for RedisTokenChecker {
-    async fn is_valid_access_token(&self, uid: u32, jti: &str, token: &str) -> bool {
-        self.0.is_valid_access_token(uid, jti, token).await
-    }
-    async fn is_blocked_access_token(&self, jti: &str) -> bool {
-        self.0.is_blocked_access_token(jti).await
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg = config::Config::load()?;
+    let cfg = Config::load()?;
     let public_pem: &[u8] = match &cfg.jwt_public_key {
         Some(pem) => pem.as_bytes(),
-        None => include_bytes!("../../configs/jwt_public_key.pem"),
+        None => include_bytes!("../assets/jwt_public_key.pem"),
     };
     let verifier = rushwind_authn_jwt::JwtAuthenticator::new(
         rushwind_authn_jwt::JwtOptions::new()
@@ -80,9 +33,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(AppState::connect(cfg, Arc::clone(&authenticator)).await?);
     seed::run(&state).await;
 
-    // The task queue transport (the asynq-equivalent): apalis Postgres
-    // storage + worker, registered into the same lifecycle as REST + SSE.
-    // The scheduler below is the cron producer that enqueues due jobs.
+    // The task queue transport: apalis Postgres storage + worker,
+    // registered into the same lifecycle as REST + SSE. The scheduler
+    // below is the cron producer that enqueues due jobs.
     let task_server = Arc::new(apalis_server::ApalisServer::new(
         Arc::clone(&state),
         &state.cfg.database_source,
@@ -99,13 +52,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rest_addr = parse_addr(&state.cfg.rest_addr, 7788);
     let sse_addr = parse_addr(&state.cfg.sse_addr, 7789);
 
-    // NewSseServer — a proper transport server registered into the same
-    // lifecycle as REST, so both start and shut down together.
     let sse_server = sse_server::new_sse_server(Arc::clone(&state), sse_addr)
         .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
 
-    // The cron producer transport (the asynq scheduler's job): static
-    // system crons + the DB-driven PERIODIC wildcard job.
+    // The cron producer transport: static system crons + the DB-driven
+    // PERIODIC wildcard job.
     let cron_server = apalis_server::cron_server(Arc::clone(&state), Arc::clone(&task_server));
 
     let server = AxumServer::new(rest_addr, app)?;

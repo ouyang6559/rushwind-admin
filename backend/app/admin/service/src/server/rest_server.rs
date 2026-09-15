@@ -21,7 +21,6 @@
 
 use std::sync::Arc;
 
-use axum::http::header;
 use axum::routing::MethodRouter;
 
 use crate::service::{
@@ -47,13 +46,27 @@ use rushwind_http_binding::wire::RouteWire;
 /// its binary imports (the compatibility spec §2.1 register).
 const REGISTERED_SUBTYPES: &[&str] = &["json", "proto", "x-www-form-urlencoded"];
 
+/// The adapter wiring the service-side Redis session store into the
+/// auth gate's server-side check stage.
+struct RedisTokenChecker(crate::token::TokenStore);
+
+#[async_trait::async_trait]
+impl middleware_auth::AccessTokenChecker for RedisTokenChecker {
+    async fn is_valid_access_token(&self, uid: u32, jti: &str, token: &str) -> bool {
+        self.0.is_valid_access_token(uid, jti, token).await
+    }
+    async fn is_blocked_access_token(&self, jti: &str) -> bool {
+        self.0.is_blocked_access_token(jti).await
+    }
+}
+
 /// Builds the mounted router. `state` carries the verification engine
 /// and the server-side session store; the assembly order mirrors
 /// module.
 pub fn build_router(state: Arc<AppState>) -> axum::Router {
     let descriptor_pool = pool();
     let authenticator = Arc::clone(&state.authenticator);
-    let checker = Arc::new(crate::RedisTokenChecker(state.tokens.clone()))
+    let checker = Arc::new(RedisTokenChecker(state.tokens.clone()))
         as Arc<dyn middleware_auth::AccessTokenChecker + 'static>;
 
     // The per-route layer composition (see the module docs): bind layer
@@ -417,7 +430,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
 
     // The docs surface (Swagger UI / Redoc / raw spec), switched by
     // server.rest.enable_swagger / enable_redoc.
-    app = app.merge(crate::docs_server::router(
+    app = app.merge(crate::server::docs_server::router(
         state.cfg.enable_swagger,
         state.cfg.enable_redoc,
     ));

@@ -1,6 +1,5 @@
 //! DictTypeService — service layer for module
 
-
 use std::sync::Arc;
 
 use sea_orm::sea_query::Condition;

@@ -1,6 +1,6 @@
 [package]
 name = "admin-service"
-description = "The admin REST service: the assembly entry (cmd/server) and the server wiring module (internal/server) — mirroring the reference app/admin/service layout."
+description = "The admin REST service: a thin assembly binary over the admin-service library (config, state, data layer, REST/SSE/task transports)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,7 +9,7 @@ publish = false
 
 [[bin]]
 name = "admin-server"
-path = "cmd/server/main.rs"
+path = "src/main.rs"
 
 [dependencies]
 gen-rust = { path = "../../../api/gen/rust" }

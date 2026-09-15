@@ -96,9 +96,7 @@ impl gen_rust::gen::services::LoginPolicyServiceHandlers for LoginPolicyService 
         req: GetLoginPolicyRequest,
     ) -> Result<LoginPolicy, StatusError> {
         let Some(
-            gen_rust::proto::authentication::service::v1::get_login_policy_request::QueryBy::Id(
-                id,
-            ),
+            gen_rust::proto::authentication::service::v1::get_login_policy_request::QueryBy::Id(id),
         ) = req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

@@ -396,9 +396,7 @@ impl gen_rust::gen::services::FileTransferServiceHandlers for FileTransferServic
             storage_path: path.clone(),
             updated_at: row.updated_at.and_then(crate::state::naive_to_ts),
             content: Some(
-                gen_rust::proto::storage::service::v1::download_file_response::Content::File(
-                    bytes,
-                ),
+                gen_rust::proto::storage::service::v1::download_file_response::Content::File(bytes),
             ),
         })
     }

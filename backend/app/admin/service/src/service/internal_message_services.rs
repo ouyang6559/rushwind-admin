@@ -272,9 +272,9 @@ impl gen_rust::gen::services::InternalMessageServiceHandlers for InternalMessage
             // SSE push per recipient (publishNotification: stream = userId,
             // event = notification, data = the recipient protojson).
             for uid in chunk {
-                crate::sse_server::publish_recipient(
+                crate::server::sse_server::publish_recipient(
                     &self.state.hub,
-                    &crate::sse_server::NotificationPayload {
+                    &crate::server::sse_server::NotificationPayload {
                         id: message.id,
                         message_id: message.id,
                         recipient_user_id: *uid,

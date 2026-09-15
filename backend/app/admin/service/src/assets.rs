@@ -4,4 +4,4 @@
 //! reads it at runtime; nothing loads from the filesystem.
 
 /// The protoc-gen-openapi output for the full admin contract.
-pub const OPENAPI_DATA: &str = include_str!("assets/openapi.yaml");
+pub const OPENAPI_DATA: &str = include_str!("../assets/openapi.yaml");

@@ -2,8 +2,7 @@
 //! operation, data-access, permission, policy-evaluation): newest-first
 //! listing with paging over the six append-only tables.
 
-use sea_orm::{DatabaseConnection, EntityTrait, PaginatorTrait, QueryOrder, QuerySelect,
-};
+use sea_orm::{DatabaseConnection, EntityTrait, PaginatorTrait, QueryOrder, QuerySelect};
 
 use crate::paging as admin_paging;
 use gen_rust::proto::pagination::PagingRequest;

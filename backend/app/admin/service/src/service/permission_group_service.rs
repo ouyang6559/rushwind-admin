@@ -75,9 +75,7 @@ impl gen_rust::gen::services::PermissionGroupServiceHandlers for PermissionGroup
         req: GetPermissionGroupRequest,
     ) -> Result<PermissionGroup, StatusError> {
         let Some(
-            gen_rust::proto::permission::service::v1::get_permission_group_request::QueryBy::Id(
-                id,
-            ),
+            gen_rust::proto::permission::service::v1::get_permission_group_request::QueryBy::Id(id),
         ) = req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

@@ -214,7 +214,7 @@ impl gen_rust::gen::services::ScriptServiceHandlers for ScriptService {
         _req: TestRunScriptRequest,
     ) -> Result<TestRunScriptResponse, StatusError> {
         // The script engine (Lua/JS) lands with the script-runtime phase;
-        
+
         Err(status_error("UNIMPLEMENTED", "script runtime not wired"))
     }
 

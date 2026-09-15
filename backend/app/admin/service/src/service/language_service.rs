@@ -1,6 +1,5 @@
 //! LanguageService — service layer for module
 
-
 use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
@@ -60,15 +59,15 @@ impl gen_rust::gen::services::LanguageServiceHandlers for LanguageService {
     ) -> Result<Language, StatusError> {
         let id = match req.query_by {
             Some(gen_rust::proto::dict::service::v1::get_language_request::QueryBy::Id(id)) => id,
-            Some(gen_rust::proto::dict::service::v1::get_language_request::QueryBy::Code(
-                code,
-            )) => crate::data::sys_languages::Entity::find()
-                .filter(crate::data::sys_languages::Column::LanguageCode.eq(code))
-                .one(&self.state.db)
-                .await
-                .map_err(db_err)?
-                .map(|r| r.id)
-                .ok_or_else(|| not_found("language"))?,
+            Some(gen_rust::proto::dict::service::v1::get_language_request::QueryBy::Code(code)) => {
+                crate::data::sys_languages::Entity::find()
+                    .filter(crate::data::sys_languages::Column::LanguageCode.eq(code))
+                    .one(&self.state.db)
+                    .await
+                    .map_err(db_err)?
+                    .map(|r| r.id)
+                    .ok_or_else(|| not_found("language"))?
+            }
             None => return Err(status_error("BAD_REQUEST", "query_by required")),
         };
         let row = crate::data::sys_languages::Entity::find_by_id(id)

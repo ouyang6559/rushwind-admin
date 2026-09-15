@@ -118,7 +118,6 @@ impl UserTokenPayload {
     }
 
     /// The refresh-claim bag: uid + jti + iat + exp only
-    
     pub fn to_refresh_claims(&self, exp_unix: i64) -> Map<String, Value> {
         Map::from_iter([
             ("uid".to_string(), json!(self.user_id)),

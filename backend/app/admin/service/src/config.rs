@@ -1,10 +1,16 @@
-//! Config loading — parses the vendored reference yaml files
-//! (`configs/data.yaml`, `configs/auth.yaml`, `configs/oss.yaml`) with
-//! the same env overrides honors (`GWA_AUTH_JWT_*`,
+//! Config loading — parses the embedded reference yaml defaults
+//! (`assets/data.yaml`, `assets/auth.yaml`, `assets/oss.yaml`,
+//! `assets/server.yaml`, compiled into the binary) with the same env
+//! overrides honors (`GWA_AUTH_JWT_*`,
 //! plus `GWA_DATABASE_SOURCE` / `GWA_REDIS_ADDR` / `GWA_REDIS_PASSWORD`
 //! for out-of-container runs).
 
 use serde::Deserialize;
+
+const DATA_YAML: &str = include_str!("../assets/data.yaml");
+const AUTH_YAML: &str = include_str!("../assets/auth.yaml");
+const OSS_YAML: &str = include_str!("../assets/oss.yaml");
+const SERVER_YAML: &str = include_str!("../assets/server.yaml");
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -197,32 +203,16 @@ fn parse_go_duration(text: &str) -> Option<f64> {
     Some(secs)
 }
 
-fn read_repo_file(rel: &str) -> Option<String> {
-    // configs/ sits next to the crate root; main.rs runs from the workspace.
-    for base in ["app/admin/service", "backend/app/admin/service", "."] {
-        let path = format!("{base}/{rel}");
-        if let Ok(text) = std::fs::read_to_string(&path) {
-            return Some(text);
-        }
-    }
-    None
-}
-
 impl Config {
     /// Loads the vendored yaml files with env overrides applied.
     pub fn load() -> Result<Self, String> {
         let data: DataFile =
-            serde_yaml::from_str(&read_repo_file("configs/data.yaml").unwrap_or_default())
-                .map_err(|e| format!("parse data.yaml: {e}"))?;
+            serde_yaml::from_str(DATA_YAML).map_err(|e| format!("parse data.yaml: {e}"))?;
         let auth: AuthFile =
-            serde_yaml::from_str(&read_repo_file("configs/auth.yaml").unwrap_or_default())
-                .map_err(|e| format!("parse auth.yaml: {e}"))?;
-        let oss: OssFile =
-            serde_yaml::from_str(&read_repo_file("configs/oss.yaml").unwrap_or_default())
-                .unwrap_or(OssFile { oss: None });
+            serde_yaml::from_str(AUTH_YAML).map_err(|e| format!("parse auth.yaml: {e}"))?;
+        let oss: OssFile = serde_yaml::from_str(OSS_YAML).unwrap_or(OssFile { oss: None });
         let server: ServerFile =
-            serde_yaml::from_str(&read_repo_file("configs/server.yaml").unwrap_or_default())
-                .unwrap_or(ServerFile { server: None });
+            serde_yaml::from_str(SERVER_YAML).unwrap_or(ServerFile { server: None });
         let server_section = server.server.unwrap_or_default();
         let rest_section = server_section.rest.unwrap_or(RestSection {
             addr: ":7788".into(),

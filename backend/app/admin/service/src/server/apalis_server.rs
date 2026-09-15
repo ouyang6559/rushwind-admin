@@ -11,14 +11,12 @@ use std::sync::Arc;
 use apalis_core::backend::Backend;
 use apalis_core::error::{BoxDynError, Error as ApalisError};
 use apalis_core::layers::Ack;
-use apalis_core::storage::Storage;
-use apalis_core::request::Request;
 use apalis_core::response::Response;
+use apalis_core::storage::Storage;
 use apalis_core::worker::{Context as WorkerContext, Worker, WorkerId};
-use rushwind_apalis_postgres::{PgContext, PostgresStorage};
-use rushwind_transport::{Server, ServerError, ServerFuture, StopSignal};
 use futures_util::StreamExt as _;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use rushwind_apalis_postgres::PostgresStorage;
+use rushwind_transport::{Server, ServerError, ServerFuture, StopSignal};
 use serde_json::json;
 
 use crate::state::AppState;
@@ -47,15 +45,15 @@ impl ApalisServer {
             "queue": queue,
         }))
         .map_err(|e| format!("apalis storage: {e}"))?;
-        Ok(Self { state, storage, queue: queue.to_string() })
+        Ok(Self {
+            state,
+            storage,
+            queue: queue.to_string(),
+        })
     }
 
     /// Enqueues a job (the scheduler's producer side).
-    pub async fn enqueue(
-        &self,
-        type_name: &str,
-        payload: serde_json::Value,
-    ) -> Result<(), String> {
+    pub async fn enqueue(&self, type_name: &str, payload: serde_json::Value) -> Result<(), String> {
         let job = json!({ "type": type_name, "payload": payload }).to_string();
         let mut storage = self.storage.clone();
         storage
@@ -73,13 +71,18 @@ impl ApalisServer {
     ) {
         match type_name {
             "tenant_expiry_scan" => {
-                use sea_orm::{ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, QueryFilter as _, Set};
+                use sea_orm::{
+                    ActiveModelTrait as _, ColumnTrait as _, EntityTrait as _, QueryFilter as _,
+                    Set,
+                };
                 let expired = crate::data::sys_tenants::Entity::find()
                     .filter(
                         sea_orm::sea_query::Condition::all()
                             .add(crate::data::sys_tenants::Column::Status.eq("ON"))
                             .add(crate::data::sys_tenants::Column::ExpiredAt.is_not_null())
-                            .add(crate::data::sys_tenants::Column::ExpiredAt.lte(crate::data::now())),
+                            .add(
+                                crate::data::sys_tenants::Column::ExpiredAt.lte(crate::data::now()),
+                            ),
                     )
                     .all(db)
                     .await
@@ -93,7 +96,9 @@ impl ApalisServer {
                 eprintln!("[scheduler] tenant_expiry_scan: {count} expired");
             }
             "audit_log_archive" => {
-                eprintln!("[scheduler] audit_log_archive: retention export skipped (no archive dir)");
+                eprintln!(
+                    "[scheduler] audit_log_archive: retention export skipped (no archive dir)"
+                );
             }
             "backup" | "broadcast_message" | "script_task" => {
                 eprintln!("[scheduler] {type_name} fired with payload {payload}");
@@ -115,8 +120,7 @@ impl Server for ApalisServer {
                 .await
                 .map_err(|e| ServerError::Failed(format!("apalis setup: {e}")))?;
 
-            let worker =
-                Worker::new(WorkerId::new("admin-task-worker"), WorkerContext::default());
+            let worker = Worker::new(WorkerId::new("admin-task-worker"), WorkerContext::default());
             worker.start();
             let poller = self.storage.clone().poll(&worker);
             tokio::spawn(poller.heartbeat);
@@ -192,42 +196,34 @@ pub fn cron_server(
 
     // System crons.
     let server = CronServer::new("cron://admin")
-        .with_job(CronJob::new(
-            "tenant_expiry_scan",
-            spec("0 * * * *"),
-            {
+        .with_job(CronJob::new("tenant_expiry_scan", spec("0 * * * *"), {
+            let state = Arc::clone(&state);
+            move || {
                 let state = Arc::clone(&state);
-                move || {
-                    let state = Arc::clone(&state);
-                    Box::pin(async move {
-                        ApalisServer::run_handler(
-                            &state.db,
-                            "tenant_expiry_scan",
-                            &serde_json::json!({}),
-                        )
-                        .await;
-                    })
-                }
-            },
-        ))
-        .with_job(CronJob::new(
-            "audit_log_archive",
-            spec("30 3 * * *"),
-            {
+                Box::pin(async move {
+                    ApalisServer::run_handler(
+                        &state.db,
+                        "tenant_expiry_scan",
+                        &serde_json::json!({}),
+                    )
+                    .await;
+                })
+            }
+        }))
+        .with_job(CronJob::new("audit_log_archive", spec("30 3 * * *"), {
+            let state = Arc::clone(&state);
+            move || {
                 let state = Arc::clone(&state);
-                move || {
-                    let state = Arc::clone(&state);
-                    Box::pin(async move {
-                        ApalisServer::run_handler(
-                            &state.db,
-                            "audit_log_archive",
-                            &serde_json::json!({}),
-                        )
-                        .await;
-                    })
-                }
-            },
-        ));
+                Box::pin(async move {
+                    ApalisServer::run_handler(
+                        &state.db,
+                        "audit_log_archive",
+                        &serde_json::json!({}),
+                    )
+                    .await;
+                })
+            }
+        }));
 
     // The wildcard job: DB-driven PERIODIC rows. The handler re-reads
     // `sys_tasks` each tick, so ControlTask/Update/Delete take effect
@@ -239,8 +235,8 @@ pub fn cron_server(
             let state = Arc::clone(&state);
             let tasks = Arc::clone(&tasks);
             Box::pin(async move {
-                use sea_orm::{ColumnTrait as _, EntityTrait as _, QueryFilter as _};
                 use chrono::Timelike as _;
+                use sea_orm::{ColumnTrait as _, EntityTrait as _, QueryFilter as _};
                 let now = crate::data::now();
                 if now.second() != 0 {
                     return;

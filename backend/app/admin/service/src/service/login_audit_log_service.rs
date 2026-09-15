@@ -93,9 +93,8 @@ impl gen_rust::gen::services::LoginAuditLogServiceHandlers for LoginAuditLogServ
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetLoginAuditLogRequest,
     ) -> Result<LoginAuditLog, StatusError> {
-        let Some(gen_rust::proto::audit::service::v1::get_login_audit_log_request::QueryBy::Id(
-            id,
-        )) = req.query_by
+        let Some(gen_rust::proto::audit::service::v1::get_login_audit_log_request::QueryBy::Id(id)) =
+            req.query_by
         else {
             return Err(crate::state::status_error(
                 "BAD_REQUEST",

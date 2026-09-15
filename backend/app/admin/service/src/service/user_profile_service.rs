@@ -281,14 +281,14 @@ impl UserProfileServiceHandlers for UserProfileService {
             .ok_or_else(|| status_error("USER_NOT_FOUND", "user not found"))?;
         let mut active: crate::data::sys_users::ActiveModel = row.into();
         match req.contact {
-            Some(
-                gen_rust::proto::identity::service::v1::bind_contact_request::Contact::Phone(p),
-            ) => {
+            Some(gen_rust::proto::identity::service::v1::bind_contact_request::Contact::Phone(
+                p,
+            )) => {
                 active.mobile = Set(Some(p.phone));
             }
-            Some(
-                gen_rust::proto::identity::service::v1::bind_contact_request::Contact::Email(e),
-            ) => {
+            Some(gen_rust::proto::identity::service::v1::bind_contact_request::Contact::Email(
+                e,
+            )) => {
                 active.email = Set(Some(e.email));
             }
             None => return Err(status_error("BAD_REQUEST", "missing contact")),

@@ -1,0 +1,108 @@
+[
+  {
+    "id": "gate-invalid-apis",
+    "class": "gate-invalid",
+    "kind": "EnvelopeExact",
+    "method": "GET",
+    "path": "/admin/v1/apis",
+    "headers": { "Authorization": "Bearer eyJhbGciOiJSUzI1NiJ9.e30.c2ln" },
+    "body": null
+  },
+  {
+    "id": "gate-invalid-mfa-status",
+    "class": "gate-invalid",
+    "kind": "EnvelopeExact",
+    "method": "GET",
+    "path": "/admin/v1/mfa/status",
+    "headers": { "Authorization": "Bearer garbage" },
+    "body": null
+  },
+  {
+    "id": "codec-login-malformed",
+    "class": "codec-body",
+    "kind": "EnvelopeShape",
+    "method": "POST",
+    "path": "/admin/v1/login",
+    "headers": {},
+    "body": "not json at all"
+  },
+  {
+    "id": "codec-login-wrongtype",
+    "class": "codec-body",
+    "kind": "EnvelopeShape",
+    "method": "POST",
+    "path": "/admin/v1/login",
+    "headers": {},
+    "body": "{\"username\": 123, \"password\": 456}"
+  },
+  {
+    "id": "codec-forgotpw-malformed",
+    "class": "codec-body",
+    "kind": "EnvelopeShape",
+    "method": "POST",
+    "path": "/admin/v1/forgot-password",
+    "headers": {},
+    "body": "{\"email\": tru}"
+  },
+  {
+    "id": "cors-preflight-allowed",
+    "class": "cors-preflight",
+    "kind": "Cors",
+    "method": "OPTIONS",
+    "path": "/admin/v1/login",
+    "headers": {
+      "Origin": "http://localhost:5666",
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "authorization,content-type"
+    },
+    "body": null
+  },
+  {
+    "id": "cors-preflight-disallowed",
+    "class": "cors-preflight",
+    "kind": "Cors",
+    "method": "OPTIONS",
+    "path": "/admin/v1/login",
+    "headers": {
+      "Origin": "http://evil.example",
+      "Access-Control-Request-Method": "POST"
+    },
+    "body": null
+  },
+  {
+    "id": "codec-ct-missing-login",
+    "class": "codec-ct",
+    "kind": "EnvelopeExact",
+    "method": "POST",
+    "path": "/admin/v1/login",
+    "headers": {},
+    "body": null
+  },
+  {
+    "id": "gate-invalid-ct-plain",
+    "class": "codec-ct",
+    "kind": "EnvelopeExact",
+    "method": "POST",
+    "path": "/admin/v1/logout",
+    "headers": { "Content-Type": "text/plain" },
+    "body": null
+  },
+  {
+    "id": "path-bind-post-auth-ak",
+    "class": "path-bind-post-auth",
+    "kind": "EnvelopeShape",
+    "method": "GET",
+    "path": "/admin/v1/access-keys/notanumber",
+    "headers": {},
+    "body": null
+  },
+  {
+    "id": "pending-form-ct-login",
+    "class": "pending-form-ct",
+    "kind": "Pending",
+    "method": "POST",
+    "path": "/admin/v1/login",
+    "headers": { "Content-Type": "application/x-www-form-urlencoded" },
+    "body": "username=abc&password=xyz"
+  }
+]

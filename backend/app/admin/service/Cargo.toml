@@ -1,0 +1,47 @@
+[package]
+name = "admin-service"
+description = "The admin REST service: the assembly entry (cmd/server) and the server wiring module (internal/server) — mirroring the reference app/admin/service layout."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "admin-server"
+path = "cmd/server/main.rs"
+
+[dependencies]
+admin-api = { path = "../../../api/admin-api" }
+middleware-auth = { path = "../../../pkg/middleware-auth" }
+rushwind-authn = { path = "../../../../../rushwind/crates/rushwind-authn" }
+rushwind-authn-jwt = { path = "../../../../../rushwind/crates/rushwind-authn-jwt" }
+rushwind-http = { path = "../../../../../rushwind/crates/rushwind-http" }
+rushwind-http-binding = { path = "../../../../../rushwind/crates/rushwind-http-binding" }
+rushwind-transport = { path = "../../../../../rushwind/crates/rushwind-transport" }
+rushwind-transport-axum = { path = "../../../../../rushwind/crates/rushwind-transport-axum" }
+rushwind-core = { path = "../../../../../rushwind/crates/rushwind-core" }
+axum = { version = "0.8", default-features = false }
+tokio = { workspace = true }
+sea-orm = { workspace = true }
+redis = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }
+bcrypt = { workspace = true }
+aes = { workspace = true }
+cbc = { workspace = true }
+sha2 = { workspace = true }
+sha1 = { workspace = true }
+hmac = { workspace = true }
+aes-gcm = { workspace = true }
+base64 = { workspace = true }
+pbjson-types = { workspace = true }
+rust-utils = { workspace = true }
+captcha = { workspace = true }
+qrcode = "0.14"
+hex = { workspace = true }
+async-trait = { workspace = true }

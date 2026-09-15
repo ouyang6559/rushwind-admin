@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package admin.service.v1;
+
+import "google/api/annotations.proto";
+
+import "server_monitor/service/v1/server_monitor.proto";
+
+// 服务监控管理服务（只读）
+service ServerMonitorService {
+  // 查询服务监控信息
+  rpc Get (server_monitor.service.v1.GetServerMonitorRequest) returns (server_monitor.service.v1.ServerMonitorInfo) {
+    option (google.api.http) = {
+      get: "/admin/v1/server-monitor"
+    };
+  }
+}

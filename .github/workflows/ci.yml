@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: gates (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      # The backend workspace consumes the framework monorepo through
+      # relative path dependencies that resolve to a SIBLING of this repo
+      # (e.g. ../../../../../rushwind from app/admin/service). Check it out
+      # inside the workspace, then link it into that sibling position.
+      - uses: actions/checkout@v7
+        with:
+          repository: tx7do/rushwind
+          ref: main
+          path: rushwind
+      - name: Link the framework repo as a sibling of this checkout
+        run: |
+          cd "$GITHUB_WORKSPACE/.."
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            pwsh -NoProfile -Command 'New-Item -ItemType Junction -Path rushwind -Target rushwind-admin\rushwind | Out-Null'
+          else
+            ln -s "$GITHUB_WORKSPACE/rushwind" rushwind
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+
+      # admin-proto's build script (and the framework generator's fixture
+      # test) invoke a real `protoc` — protox drops custom option bytes.
+      - name: Install protoc (ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Install protoc (windows)
+        if: runner.os == 'Windows'
+        run: choco install protoc -y --no-progress
+        shell: pwsh
+
+      # Vendored protos must match MANIFEST.sha256 (anti-tamper gate).
+      # The go source repo is absent on CI, so the upstream-drift
+      # comparison self-skips inside the script (exit 0); drift
+      # acceptance happens on dev machines where both repos exist.
+      - name: Proto contract gate (MANIFEST consistency)
+        run: bash api/sync-protos.sh --check
+
+      # Scoped to THIS repo's packages: `cargo fmt --all` would also
+      # enforce on the framework path-deps, which the framework repo's
+      # own CI owns.
+      - name: Format
+        run: cargo fmt -p admin-api -p admin-diff -p admin-service -p middleware-auth -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace

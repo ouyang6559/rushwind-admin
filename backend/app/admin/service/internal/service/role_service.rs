@@ -1,0 +1,480 @@
+//! RoleService — the port of the reference internal/service/role_service.go:
+//! role CRUD with permission / org-unit / field-permission bindings; the
+//! template (tenant:manager) role is copied when a tenant is provisioned
+//! (TenantService.WithAdmin).
+
+use std::sync::Arc;
+
+use sea_orm::sea_query::Condition;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
+};
+
+use crate::state::{
+    db_err, internal_error, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
+};
+use admin_api::proto::pagination::PagingRequest;
+use admin_api::proto::permission::service::v1::{
+    CreateRoleRequest, DeleteRoleRequest, GetRoleRequest, ListRoleResponse, Role,
+    RoleFieldPermission, UpdateRoleRequest,
+};
+use pbjson_types::Empty;
+
+fn scope_to_str(v: i32) -> String {
+    match v {
+        1 => "SELF".into(),
+        2 => "UNIT_ONLY".into(),
+        3 => "UNIT_AND_CHILD".into(),
+        4 => "SELECTED_UNITS".into(),
+        _ => "ALL".into(),
+    }
+}
+
+fn scope_to_proto(s: &str) -> i32 {
+    match s {
+        "SELF" => 1,
+        "UNIT_ONLY" => 2,
+        "UNIT_AND_CHILD" => 3,
+        "SELECTED_UNITS" => 4,
+        _ => 0,
+    }
+}
+
+fn status_to_proto(s: &str) -> i32 {
+    if s == "OFF" {
+        0
+    } else {
+        1
+    }
+}
+
+fn type_to_proto(s: &str) -> i32 {
+    match s {
+        "SYSTEM" => 1,
+        "TEMPLATE" => 2,
+        _ => 3,
+    }
+}
+
+async fn role_proto(state: &AppState, r: crate::data::sys_roles::Model) -> Role {
+    let perm_ids: Vec<u32> = crate::data::sys_role_permissions::Entity::find()
+        .filter(crate::data::sys_role_permissions::Column::RoleId.eq(r.id))
+        .all(&state.db)
+        .await
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|row| row.permission_id)
+        .collect();
+    let org_units: Vec<u32> = crate::data::sys_role_org_units::Entity::find()
+        .filter(crate::data::sys_role_org_units::Column::RoleId.eq(r.id))
+        .all(&state.db)
+        .await
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|row| row.org_unit_id)
+        .collect();
+    // The proto groups hidden fields per resource; the rows are flat.
+    let mut field_permissions: Vec<RoleFieldPermission> = Vec::new();
+    for row in crate::data::sys_role_field_permissions::Entity::find()
+        .filter(crate::data::sys_role_field_permissions::Column::RoleId.eq(r.id))
+        .all(&state.db)
+        .await
+        .unwrap_or_default()
+    {
+        let (Some(resource), Some(field)) = (row.resource, row.field_name) else {
+            continue;
+        };
+        match field_permissions
+            .iter_mut()
+            .find(|fp| fp.resource == resource)
+        {
+            Some(fp) => fp.hidden_fields.push(field),
+            None => field_permissions.push(RoleFieldPermission {
+                resource,
+                hidden_fields: vec![field],
+            }),
+        }
+    }
+    Role {
+        id: Some(r.id),
+        name: Some(r.name),
+        code: Some(r.code),
+        sort_order: r.sort_order,
+        status: r.status.as_deref().map(status_to_proto),
+        description: r.description,
+        is_protected: r.is_protected,
+        r#type: r.type_column.as_deref().map(type_to_proto),
+        data_scope: r.data_scope.as_deref().map(scope_to_proto),
+        permissions: perm_ids,
+        org_units,
+        field_permissions,
+        tenant_id: r.tenant_id,
+        tenant_name: None,
+        created_by: r.created_by,
+        updated_by: r.updated_by,
+        deleted_by: r.deleted_by,
+        created_at: r.created_at.and_then(crate::state::naive_to_ts),
+        updated_at: r.updated_at.and_then(crate::state::naive_to_ts),
+        deleted_at: r.deleted_at.and_then(crate::state::naive_to_ts),
+    }
+}
+
+pub struct RoleService {
+    pub state: Arc<AppState>,
+}
+
+impl RoleService {
+    fn apply_fields(a: &mut crate::data::sys_roles::ActiveModel, data: &Role) {
+        if let Some(v) = &data.name {
+            a.name = Set(v.clone());
+        }
+        if let Some(v) = &data.code {
+            a.code = Set(v.clone());
+        }
+        if let Some(v) = &data.description {
+            a.description = Set(Some(v.clone()));
+        }
+        if let Some(v) = data.is_protected {
+            a.is_protected = Set(Some(v));
+        }
+        if let Some(v) = data.status {
+            a.status = Set(Some(if v == 0 { "OFF".into() } else { "ON".into() }));
+        }
+        if let Some(v) = data.sort_order {
+            a.sort_order = Set(Some(v));
+        }
+        if let Some(v) = data.data_scope {
+            a.data_scope = Set(Some(scope_to_str(v)));
+        }
+    }
+
+    fn type_to_str(v: i32) -> String {
+        match v {
+            1 => "SYSTEM".into(),
+            2 => "TEMPLATE".into(),
+            _ => "TENANT".into(),
+        }
+    }
+
+    /// Sync the role's permission/org-unit/field-permission bindings.
+    async fn sync_bindings(
+        &self,
+        tenant_id: u32,
+        role_id: u32,
+        data: &Role,
+    ) -> Result<(), StatusError> {
+        crate::data::sys_role_permissions::Entity::delete_many()
+            .filter(
+                Condition::all()
+                    .add(crate::data::sys_role_permissions::Column::TenantId.eq(tenant_id))
+                    .add(crate::data::sys_role_permissions::Column::RoleId.eq(role_id)),
+            )
+            .exec(&self.state.db)
+            .await
+            .map_err(db_err)?;
+        for perm in &data.permissions {
+            crate::data::sys_role_permissions::ActiveModel {
+                tenant_id: Set(Some(tenant_id)),
+                role_id: Set(Some(role_id)),
+                permission_id: Set(Some(*perm)),
+                effect: Set(Some("ALLOW".into())),
+                status: Set(Some("ON".into())),
+                created_at: Set(Some(crate::data::now())),
+                updated_at: Set(Some(crate::data::now())),
+                ..Default::default()
+            }
+            .insert(&self.state.db)
+            .await
+            .map_err(db_err)?;
+        }
+        crate::data::sys_role_org_units::Entity::delete_many()
+            .filter(crate::data::sys_role_org_units::Column::RoleId.eq(role_id))
+            .exec(&self.state.db)
+            .await
+            .map_err(db_err)?;
+        for unit in &data.org_units {
+            crate::data::sys_role_org_units::ActiveModel {
+                tenant_id: Set(Some(tenant_id)),
+                role_id: Set(Some(role_id)),
+                org_unit_id: Set(Some(*unit)),
+                created_at: Set(Some(crate::data::now())),
+                updated_at: Set(Some(crate::data::now())),
+                ..Default::default()
+            }
+            .insert(&self.state.db)
+            .await
+            .map_err(db_err)?;
+        }
+        crate::data::sys_role_field_permissions::Entity::delete_many()
+            .filter(crate::data::sys_role_field_permissions::Column::RoleId.eq(role_id))
+            .exec(&self.state.db)
+            .await
+            .map_err(db_err)?;
+        for fp in &data.field_permissions {
+            for field in &fp.hidden_fields {
+                crate::data::sys_role_field_permissions::ActiveModel {
+                    tenant_id: Set(Some(tenant_id)),
+                    role_id: Set(Some(role_id)),
+                    resource: Set(Some(fp.resource.clone())),
+                    field_name: Set(Some(field.clone())),
+                    created_at: Set(Some(crate::data::now())),
+                    updated_at: Set(Some(crate::data::now())),
+                    ..Default::default()
+                }
+                .insert(&self.state.db)
+                .await
+                .map_err(db_err)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl admin_api::gen::services::RoleServiceHandlers for RoleService {
+    async fn list(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        req: PagingRequest,
+    ) -> Result<ListRoleResponse, StatusError> {
+        let tid = tenant_of(&ctx);
+        let base = crate::data::sys_roles::Entity::find()
+            .filter(crate::data::sys_roles::Column::TenantId.eq(tid))
+            .order_by_asc(crate::data::sys_roles::Column::SortOrder);
+        let (paged, paging) = crate::paging::apply(base, &req);
+        let rows = paged.all(&self.state.db).await.map_err(db_err)?;
+        let total = if paging.no_paging {
+            rows.len() as u64
+        } else {
+            crate::data::sys_roles::Entity::find()
+                .filter(crate::data::sys_roles::Column::TenantId.eq(tid))
+                .count(&self.state.db)
+                .await
+                .unwrap_or(0)
+        };
+        let mut items = Vec::with_capacity(rows.len());
+        for r in rows {
+            items.push(role_proto(&self.state, r).await);
+        }
+        Ok(ListRoleResponse { items, total })
+    }
+
+    async fn get(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        req: GetRoleRequest,
+    ) -> Result<Role, StatusError> {
+        let tid = tenant_of(&ctx);
+        let row = match req.query_by {
+            Some(admin_api::proto::permission::service::v1::get_role_request::QueryBy::Id(id)) => {
+                crate::data::sys_roles::Entity::find_by_id(id)
+                    .one(&self.state.db)
+                    .await
+                    .map_err(db_err)?
+            }
+            Some(admin_api::proto::permission::service::v1::get_role_request::QueryBy::Code(
+                code,
+            )) => crate::data::sys_roles::Entity::find()
+                .filter(
+                    Condition::all()
+                        .add(crate::data::sys_roles::Column::TenantId.eq(tid))
+                        .add(crate::data::sys_roles::Column::Code.eq(code)),
+                )
+                .one(&self.state.db)
+                .await
+                .map_err(db_err)?,
+            Some(admin_api::proto::permission::service::v1::get_role_request::QueryBy::Name(
+                name,
+            )) => crate::data::sys_roles::Entity::find()
+                .filter(
+                    Condition::all()
+                        .add(crate::data::sys_roles::Column::TenantId.eq(tid))
+                        .add(crate::data::sys_roles::Column::Name.eq(name)),
+                )
+                .one(&self.state.db)
+                .await
+                .map_err(db_err)?,
+            None => None,
+        }
+        .ok_or_else(|| not_found("role"))?;
+        Ok(role_proto(&self.state, row).await)
+    }
+
+    async fn create(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        req: CreateRoleRequest,
+    ) -> Result<Empty, StatusError> {
+        let payload = operator_of(&ctx)?;
+        let data = req
+            .data
+            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let mut a = crate::data::sys_roles::ActiveModel {
+            tenant_id: Set(Some(payload.tenant_id)),
+            name: Set(data.name.clone().unwrap_or_default()),
+            code: Set(data.code.clone().unwrap_or_default()),
+            type_column: Set(Some(Self::type_to_str(data.r#type.unwrap_or(3)))),
+            created_by: Set(Some(payload.user_id)),
+            created_at: Set(Some(crate::data::now())),
+            updated_at: Set(Some(crate::data::now())),
+            ..Default::default()
+        };
+        Self::apply_fields(&mut a, &data);
+        if a.status.clone().unwrap().is_none() {
+            a.status = Set(Some("ON".into()));
+        }
+        let inserted = a.insert(&self.state.db).await.map_err(db_err)?;
+        self.sync_bindings(payload.tenant_id, inserted.id, &data)
+            .await?;
+        Ok(Empty {})
+    }
+
+    async fn update(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        req: UpdateRoleRequest,
+    ) -> Result<Empty, StatusError> {
+        let payload = operator_of(&ctx)?;
+        let row = crate::data::sys_roles::Entity::find_by_id(req.id)
+            .filter(crate::data::sys_roles::Column::TenantId.eq(payload.tenant_id))
+            .one(&self.state.db)
+            .await
+            .map_err(db_err)?
+            .ok_or_else(|| not_found("role"))?;
+        let mut a: crate::data::sys_roles::ActiveModel = row.into();
+        if let Some(data) = &req.data {
+            Self::apply_fields(&mut a, data);
+            a.updated_by = Set(Some(payload.user_id));
+            a.updated_at = Set(Some(crate::data::now()));
+            a.update(&self.state.db).await.map_err(db_err)?;
+            self.sync_bindings(payload.tenant_id, req.id, data).await?;
+        }
+        Ok(Empty {})
+    }
+
+    async fn delete(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        req: DeleteRoleRequest,
+    ) -> Result<Empty, StatusError> {
+        let tid = tenant_of(&ctx);
+        let Some(admin_api::proto::permission::service::v1::delete_role_request::QueryBy::Id(id)) =
+            req.query_by
+        else {
+            return Err(status_error("BAD_REQUEST", "query_by required"));
+        };
+        let row = crate::data::sys_roles::Entity::find_by_id(id)
+            .filter(crate::data::sys_roles::Column::TenantId.eq(tid))
+            .one(&self.state.db)
+            .await
+            .map_err(db_err)?
+            .ok_or_else(|| not_found("role"))?;
+        if row.is_protected == Some(true) {
+            return Err(status_error(
+                "FORBIDDEN",
+                "protected role cannot be deleted",
+            ));
+        }
+        crate::data::sys_role_permissions::Entity::delete_many()
+            .filter(crate::data::sys_role_permissions::Column::RoleId.eq(id))
+            .exec(&self.state.db)
+            .await
+            .map_err(db_err)?;
+        crate::data::sys_role_org_units::Entity::delete_many()
+            .filter(crate::data::sys_role_org_units::Column::RoleId.eq(id))
+            .exec(&self.state.db)
+            .await
+            .map_err(db_err)?;
+        crate::data::sys_role_field_permissions::Entity::delete_many()
+            .filter(crate::data::sys_role_field_permissions::Column::RoleId.eq(id))
+            .exec(&self.state.db)
+            .await
+            .map_err(db_err)?;
+        crate::data::sys_roles::Entity::delete_by_id(id)
+            .exec(&self.state.db)
+            .await
+            .map_err(db_err)?;
+        Ok(Empty {})
+    }
+}
+
+impl RoleService {
+    /// CreateTenantRoleFromTemplate — copies the `template:tenant:manager`
+    /// role into a fresh tenant with its permission bindings.
+    /// Wired with tenant onboarding (storage phase).
+    #[allow(dead_code)]
+    pub async fn create_tenant_role_from_template(
+        &self,
+        tenant_id: u32,
+        operator_id: u32,
+    ) -> Result<u32, StatusError> {
+        let template = crate::data::sys_roles::Entity::find()
+            .filter(crate::data::sys_roles::Column::Code.eq("template:tenant:manager"))
+            .one(&self.state.db)
+            .await
+            .map_err(db_err)?
+            .ok_or_else(|| internal_error("tenant-manager role template missing"))?;
+        let template_proto = role_proto(&self.state, template.clone()).await;
+        let role = crate::data::sys_roles::ActiveModel {
+            tenant_id: Set(Some(tenant_id)),
+            name: Set(template.name.clone()),
+            code: Set("tenant:manager".into()),
+            is_protected: Set(Some(true)),
+            type_column: Set(Some("TENANT".into())),
+            data_scope: Set(template.data_scope.clone()),
+            status: Set(Some("ON".into())),
+            sort_order: Set(template.sort_order),
+            created_by: Set(Some(operator_id)),
+            created_at: Set(Some(crate::data::now())),
+            updated_at: Set(Some(crate::data::now())),
+            ..Default::default()
+        }
+        .insert(&self.state.db)
+        .await
+        .map_err(db_err)?;
+        self.sync_bindings(tenant_id, role.id, &template_proto)
+            .await?;
+        Ok(role.id)
+    }
+
+    #[allow(dead_code)]
+    pub async fn bind_tenant_admin(
+        &self,
+        tenant_id: u32,
+        user_id: u32,
+        role_id: u32,
+        operator_id: u32,
+    ) -> Result<(), StatusError> {
+        crate::data::sys_user_roles::ActiveModel {
+            tenant_id: Set(Some(tenant_id)),
+            user_id: Set(Some(user_id)),
+            role_id: Set(Some(role_id)),
+            is_primary: Set(Some(true)),
+            status: Set(Some("ACTIVE".into())),
+            assigned_by: Set(Some(operator_id)),
+            assigned_at: Set(Some(crate::data::now())),
+            created_at: Set(Some(crate::data::now())),
+            updated_at: Set(Some(crate::data::now())),
+            ..Default::default()
+        }
+        .insert(&self.state.db)
+        .await
+        .map_err(db_err)?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub async fn list_role_codes(&self, role_ids: &[u32]) -> Vec<String> {
+        if role_ids.is_empty() {
+            return Vec::new();
+        }
+        crate::data::sys_roles::Entity::find()
+            .filter(crate::data::sys_roles::Column::Id.is_in(role_ids.to_vec()))
+            .all(&self.state.db)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|r| r.code)
+            .collect()
+    }
+}

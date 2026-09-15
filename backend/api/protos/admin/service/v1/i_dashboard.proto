@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package admin.service.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "gnostic/openapi/v3/annotations.proto";
+
+// 后台首页分析概览服务（只读聚合）
+service DashboardService {
+  // 获取概览统计（用户总数 / 角色总数 / 今日登录次数 / 今日操作审计条数）
+  rpc GetOverview (google.protobuf.Empty) returns (DashboardOverviewResponse) {
+    option (google.api.http) = {
+      get: "/admin/v1/dashboard/overview"
+    };
+  }
+
+  // 获取近 N 天每日登录次数趋势
+  rpc GetLoginTrend (GetLoginTrendRequest) returns (LoginTrendResponse) {
+    option (google.api.http) = {
+      get: "/admin/v1/dashboard/login-trend"
+    };
+  }
+
+  // 操作审计按 action 分布
+  rpc GetOperationActionDistribution (google.protobuf.Empty) returns (ActionDistributionResponse) {
+    option (google.api.http) = {
+      get: "/admin/v1/dashboard/operation-action-distribution"
+    };
+  }
+
+  // 登录审计按 status 分布
+  rpc GetLoginStatusDistribution (google.protobuf.Empty) returns (StatusDistributionResponse) {
+    option (google.api.http) = {
+      get: "/admin/v1/dashboard/login-status-distribution"
+    };
+  }
+}
+
+// 概览统计 - 回应
+message DashboardOverviewResponse {
+  uint32 user_count = 1;            // 用户总数
+  uint32 role_count = 2;            // 角色总数
+  uint32 today_login_count = 3;     // 今日登录次数
+  uint32 today_operation_count = 4; // 今日操作审计条数
+}
+
+// 登录趋势 - 请求
+message GetLoginTrendRequest {
+  optional int32 days = 1 [
+    json_name = "days",
+    (gnostic.openapi.v3.property) = {description: "统计天数，默认 7"}
+  ]; // 统计天数，默认 7
+}
+
+// 登录趋势 - 回应
+message LoginTrendResponse {
+  repeated TrendPoint points = 1; // 按日期升序排列
+}
+
+// 趋势数据点
+message TrendPoint {
+  string date = 1;  // 日期，格式 YYYY-MM-DD
+  uint32 count = 2; // 当日次数
+}
+
+// 操作类型分布 - 回应
+message ActionDistributionResponse {
+  repeated DistributionItem items = 1; // label 为 action 枚举名（CREATE/UPDATE/...）
+}
+
+// 登录状态分布 - 回应
+message StatusDistributionResponse {
+  repeated DistributionItem items = 1; // label 为 status 枚举名（SUCCESS/FAILED/...）
+}
+
+// 分布数据项
+message DistributionItem {
+  string label = 1; // 枚举名
+  uint32 count = 2; // 数量
+}

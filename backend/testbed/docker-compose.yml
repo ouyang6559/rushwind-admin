@@ -1,0 +1,84 @@
+# 差分台架：Go 后端（参照实现）+ 基础设施，与宿主上运行的 Rust 后端对打。
+#
+# 用法（见 testbed/README.md）：
+#   docker compose up -d --build     # 起 pg/redis/minio + go-admin（127.0.0.1:27788）
+#   cargo run -p admin-server       # Rust 侧跑宿主 :7788
+#   cargo run -p admin-diff -- --go http://127.0.0.1:27788 --rust http://127.0.0.1:7788
+#
+# 基础设施三个服务的名字/凭据与 go 仓 backend/docker-compose.yaml 逐字一致
+#（go 后端配置里烤死了 postgres/redis/minio 内网主机名）；宿主端口一律不发布，
+# 两个后端都走内网/宿主本地，回放器经 127.0.0.1 访问。
+# Rust 后端不入 compose：其构建上下文需要仓外 rushwind 路径依赖，且差分期间
+# 由 cargo 直跑以获得快速迭代。
+
+name: rushwind-diff
+
+networks:
+  diff-tier:
+    driver: bridge
+
+services:
+  postgres:
+    image: docker.io/bitnami/postgresql:latest
+    restart: always
+    networks:
+      - diff-tier
+    environment:
+      # go 后端 data.yaml 的 DSN 写死 port=15432（go 仓同款部署形状）。
+      - POSTGRESQL_PORT_NUMBER=15432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=*Abcd123456
+      - POSTGRES_DB=gwa
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+
+  redis:
+    image: docker.io/bitnami/redis:latest
+    restart: always
+    networks:
+      - diff-tier
+    environment:
+      - ALLOW_EMPTY_PASSWORD=no
+      - REDIS_PASSWORD=*Abcd123456
+      - REDIS_AOF_ENABLED=no
+      - REDIS_IO_THREADS_DO_READS=yes
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL,CONFIG
+
+  minio:
+    image: docker.io/minio/minio:latest
+    restart: always
+    networks:
+      - diff-tier
+    environment:
+      - MINIO_ROOT_USER=root
+      - MINIO_ROOT_PASSWORD=*Abcd123456
+      - MINIO_DEFAULT_BUCKETS=images
+      - MINIO_FORCE_NEW_KEYS=yes
+      - BITNAMI_DEBUG=true
+    command: server /data --console-address ':9001'
+
+  go-admin:
+    image: rushwind-diff/go-admin
+    pull_policy: never
+    restart: always
+    networks:
+      - diff-tier
+    ports:
+      - "127.0.0.1:27788:7788"
+      - "127.0.0.1:27789:7789"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    environment:
+      - TZ=Asia/Shanghai
+    build:
+      # go 仓的 backend 目录（含 Dockerfile 与烤死的配置）；可用
+      # GO_WIND_ADMIN_BACKEND 覆盖为绝对路径。
+      context: ${GO_WIND_ADMIN_BACKEND:-../../../../GoProject/go-wind-admin/backend}
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: admin
+        APP_VERSION: 1.0.0

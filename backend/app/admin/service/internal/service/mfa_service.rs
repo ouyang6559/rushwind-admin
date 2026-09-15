@@ -1,0 +1,411 @@
+//! MfaService — the port of the reference `internal/service/mfa_service.go`:
+//! TOTP enrollment (secret cached server-side until confirm), status
+//! listing, disable/revoke, and the unauthenticated challenge completion
+//! that issues the token pair after a successful code.
+
+use std::sync::Arc;
+
+use sea_orm::sea_query::Condition;
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+
+use crate::state::{internal_error, status_error, AppState, StatusError};
+use crate::token::{new_jwt_id, SessionMeta, UserTokenPayload};
+use admin_api::gen::services::MfaServiceHandlers;
+use admin_api::proto::authentication::service::v1::{
+    confirm_enroll_method_request, start_enroll_method_response, verify_mfa_challenge_request,
+    ConfirmEnrollMethodRequest, ConfirmEnrollMethodResponse, DisableMfaRequest, EnrolledMethod,
+    GetMfaStatusRequest, GetMfaStatusResponse, ListEnrolledMethodsRequest,
+    ListEnrolledMethodsResponse, LoginResponse, RevokeMfaDeviceRequest, StartEnrollMethodRequest,
+    StartEnrollMethodResponse, TotpResult, VerifyMfaChallengeRequest,
+};
+use rushwind_authn::Authenticator as _;
+
+pub struct MfaService {
+    pub state: Arc<AppState>,
+}
+
+const ENROLL_TTL: u64 = 300;
+
+impl MfaService {
+    fn ctx_of(
+        &self,
+        ctx: &rushwind_http_binding::ctx::RequestContext,
+    ) -> Result<(u32, u32, String), StatusError> {
+        let payload = ctx
+            .claims
+            .as_ref()
+            .and_then(UserTokenPayload::from_claims)
+            .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))?;
+        Ok((payload.user_id, payload.tenant_id, payload.username))
+    }
+
+    async fn factor_for(
+        &self,
+        tenant_id: u32,
+        user_id: u32,
+    ) -> Option<crate::data::sys_user_mfa_factors::Model> {
+        crate::data::sys_user_mfa_factors::Entity::find()
+            .filter(
+                Condition::all()
+                    .add(crate::data::sys_user_mfa_factors::Column::TenantId.eq(tenant_id))
+                    .add(crate::data::sys_user_mfa_factors::Column::UserId.eq(user_id))
+                    .add(crate::data::sys_user_mfa_factors::Column::Method.eq("TOTP")),
+            )
+            .one(&self.state.db)
+            .await
+            .ok()
+            .flatten()
+    }
+
+    async fn issue_after_verify(
+        &self,
+        ctx: &rushwind_http_binding::ctx::RequestContext,
+        payload: &UserTokenPayload,
+    ) -> Result<LoginResponse, StatusError> {
+        let payload = UserTokenPayload {
+            jti: new_jwt_id(),
+            ..payload.clone()
+        };
+        let now = chrono::Utc::now().timestamp();
+        let access = self
+            .state
+            .jwt
+            .create_identity(&rushwind_authn::AuthClaims(
+                payload.to_access_claims(now + self.state.tokens.access_expires_secs),
+            ))
+            .map_err(|_| internal_error("create access token failed"))?;
+        let refresh = self
+            .state
+            .jwt
+            .create_identity(&rushwind_authn::AuthClaims(
+                payload.to_refresh_claims(now + self.state.tokens.refresh_expires_secs),
+            ))
+            .map_err(|_| internal_error("create refresh token failed"))?;
+        self.state
+            .tokens
+            .add_token_pair(payload.user_id, &payload.jti, &access, &refresh)
+            .await
+            .map_err(internal_error)?;
+        let meta = SessionMeta {
+            ip: ctx.ip.clone(),
+            user_agent: ctx.user_agent.clone(),
+            username: payload.username.clone(),
+            tenant_id: payload.tenant_id,
+            device: payload.device_id.clone(),
+            login_at: chrono::Local::now().naive_local().to_string(),
+        };
+        let _ = self
+            .state
+            .tokens
+            .set_session_meta(payload.user_id, &payload.jti, &meta)
+            .await;
+        let secure = ctx
+            .headers
+            .get("x-forwarded-proto")
+            .map(|v| v.eq_ignore_ascii_case("https"))
+            .unwrap_or(false);
+        let (rt_cookie, exp_cookie) = self.state.tokens.refresh_cookie_values(&refresh, secure);
+        ctx.add_reply_header("Set-Cookie", rt_cookie);
+        ctx.add_reply_header("Set-Cookie", exp_cookie);
+        Ok(LoginResponse {
+            token_type: 0,
+            access_token: access,
+            expires_in: self.state.tokens.access_expires_secs,
+            refresh_token: None,
+            scope: None,
+            refresh_expires_in: None,
+            id_token: None,
+            mfa_operation_id: None,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl MfaServiceHandlers for MfaService {
+    async fn get_m_f_a_status(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        req: GetMfaStatusRequest,
+    ) -> Result<GetMfaStatusResponse, crate::state::StatusError> {
+        let (uid, tid, _) = self.ctx_of(&ctx)?;
+        let _ = &req; // the reference keys off the operator identity
+        let factor = self.factor_for(tid, uid).await;
+        let mut enrolled = Vec::new();
+        if let Some(f) = &factor {
+            enrolled.push(EnrolledMethod {
+                id: f.id.to_string(),
+                method: 0, // MfaMethod::TOTP
+                display: f.display_name.clone().unwrap_or_else(|| "TOTP".into()),
+                enabled: f.status.as_deref() == Some("ENABLED"),
+                created_at: f.created_at.and_then(crate::state::naive_to_ts),
+                last_used_at: f.last_used_at.and_then(crate::state::naive_to_ts),
+            });
+        }
+        Ok(GetMfaStatusResponse {
+            enabled: factor
+                .map(|f| f.status.as_deref() == Some("ENABLED"))
+                .unwrap_or(false),
+            enrolled,
+            enforcement: 0, // OFF
+        })
+    }
+
+    async fn list_enrolled_methods(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        _req: ListEnrolledMethodsRequest,
+    ) -> Result<ListEnrolledMethodsResponse, crate::state::StatusError> {
+        let (uid, tid, _) = self.ctx_of(&ctx)?;
+        let mut items = Vec::new();
+        if let Some(f) = self.factor_for(tid, uid).await {
+            items.push(EnrolledMethod {
+                id: f.id.to_string(),
+                method: 0,
+                display: f.display_name.clone().unwrap_or_else(|| "TOTP".into()),
+                enabled: f.status.as_deref() == Some("ENABLED"),
+                created_at: f.created_at.and_then(crate::state::naive_to_ts),
+                last_used_at: f.last_used_at.and_then(crate::state::naive_to_ts),
+            });
+        }
+        Ok(ListEnrolledMethodsResponse { items })
+    }
+
+    async fn start_enroll_method(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        req: StartEnrollMethodRequest,
+    ) -> Result<StartEnrollMethodResponse, crate::state::StatusError> {
+        let (uid, tid, _) = self.ctx_of(&ctx)?;
+        // Only TOTP is enrollable end-to-end (the reference's SMS/WebAuthn
+        // branches need external providers).
+        if req.method != 0 {
+            return Err(status_error("BAD_REQUEST", "unsupported mfa method"));
+        }
+        if self.factor_for(tid, uid).await.is_some() {
+            return Err(status_error("BAD_REQUEST", "mfa method already enrolled"));
+        }
+        let op_id = new_jwt_id();
+        let secret_bytes = rand::random::<[u8; 20]>();
+        let secret = crate::crypto::base32_encode(&secret_bytes);
+        let account = format!("uid:{uid}");
+        let otp_auth_url = format!("otpauth://totp/GoWindAdmin:{account}?secret={secret}&issuer=GoWindAdmin&algorithm=SHA1&digits=6&period=30");
+        // QR as a PNG data URI.
+        // SVG rendering needs no native image stack; the data URI rides
+        // the same wire field the reference fills with a PNG.
+        let qr =
+            qrcode::QrCode::new(otp_auth_url.as_bytes()).map_err(|_| internal_error("qr code"))?;
+        let svg = qr
+            .render::<qrcode::render::svg::Color>()
+            .quiet_zone(false)
+            .build();
+        use base64::Engine as _;
+        let qr_data_uri = format!(
+            "data:image/svg+xml;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(svg)
+        );
+        let mut conn = self.state.redis.clone();
+        let _: Result<(), _> = redis::AsyncCommands::set_ex(
+            &mut conn,
+            format!("mfa:enroll:{op_id}"),
+            serde_json::json!({ "userId": uid, "tenantId": tid, "secret": secret }).to_string(),
+            ENROLL_TTL,
+        )
+        .await;
+        let expires_at = chrono::Utc::now() + chrono::Duration::seconds(ENROLL_TTL as i64);
+        Ok(StartEnrollMethodResponse {
+            expires_at: Some(crate::state::naive_to_ts(expires_at.naive_utc()).unwrap()),
+            operation_id: op_id,
+            result: Some(start_enroll_method_response::Result::Totp(TotpResult {
+                secret,
+                otp_auth_url,
+                qr_code_data_uri: qr_data_uri,
+            })),
+        })
+    }
+
+    async fn confirm_enroll_method(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        req: ConfirmEnrollMethodRequest,
+    ) -> Result<ConfirmEnrollMethodResponse, crate::state::StatusError> {
+        let (uid, tid, _) = self.ctx_of(&ctx)?;
+        let mut conn = self.state.redis.clone();
+        let raw: Option<String> =
+            redis::AsyncCommands::get(&mut conn, format!("mfa:enroll:{}", req.operation_id))
+                .await
+                .ok()
+                .flatten();
+        let Some(raw) = raw else {
+            return Err(status_error("BAD_REQUEST", "enroll operation expired"));
+        };
+        let data: serde_json::Value =
+            serde_json::from_str(&raw).map_err(|e| internal_error(e.to_string()))?;
+        let secret = data["secret"]
+            .as_str()
+            .ok_or_else(|| internal_error("enroll payload"))?
+            .to_string();
+        let stored_uid = data["userId"].as_u64().unwrap_or(0) as u32;
+        let stored_tid = data["tenantId"].as_u64().unwrap_or(0) as u32;
+        if stored_uid != uid || stored_tid != tid {
+            return Err(status_error("FORBIDDEN", "enroll operation owner mismatch"));
+        }
+        let code = match &req.credential {
+            Some(confirm_enroll_method_request::Credential::TotpCode(code)) => code.clone(),
+            _ => String::new(),
+        };
+        if !crate::crypto::totp_verify(&secret, &code) {
+            return Err(status_error("FORBIDDEN", "invalid mfa code"));
+        }
+        let factor = crate::data::sys_user_mfa_factors::ActiveModel {
+            tenant_id: Set(Some(tid)),
+            user_id: Set(Some(uid)),
+            method: Set(Some("TOTP".into())),
+            secret_hash: Set(crate::crypto::encrypt_if_needed(&secret)),
+            display_name: Set(Some("TOTP".into())),
+            status: Set(Some("ENABLED".into())),
+            created_at: Set(Some(crate::data::now())),
+            updated_at: Set(Some(crate::data::now())),
+            ..Default::default()
+        };
+        let inserted = factor
+            .insert(&self.state.db)
+            .await
+            .map_err(|e| internal_error(format!("db: {e}")))?;
+        let _: Result<i64, _> =
+            redis::AsyncCommands::del(&mut conn, format!("mfa:enroll:{}", req.operation_id)).await;
+        Ok(ConfirmEnrollMethodResponse {
+            success: true,
+            credential_id: inserted.id.to_string(),
+        })
+    }
+
+    async fn disable_m_f_a(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        req: DisableMfaRequest,
+    ) -> Result<pbjson_types::Empty, crate::state::StatusError> {
+        let (uid, tid, _) = self.ctx_of(&ctx)?;
+        let mut delete = crate::data::sys_user_mfa_factors::Entity::delete_many().filter(
+            Condition::all()
+                .add(crate::data::sys_user_mfa_factors::Column::TenantId.eq(tid))
+                .add(crate::data::sys_user_mfa_factors::Column::UserId.eq(uid)),
+        );
+        if let Some(id) = req
+            .credential_id
+            .as_deref()
+            .and_then(|v| v.parse::<u32>().ok())
+        {
+            delete = delete.filter(crate::data::sys_user_mfa_factors::Column::Id.eq(id));
+        }
+        delete
+            .exec(&self.state.db)
+            .await
+            .map_err(|e| internal_error(format!("db: {e}")))?;
+        Ok(pbjson_types::Empty {})
+    }
+
+    async fn revoke_m_f_a_device(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        req: RevokeMfaDeviceRequest,
+    ) -> Result<pbjson_types::Empty, crate::state::StatusError> {
+        let (uid, tid, _) = self.ctx_of(&ctx)?;
+        let id: u32 = req
+            .credential_id
+            .parse()
+            .map_err(|_| status_error("BAD_REQUEST", "invalid credential id"))?;
+        crate::data::sys_user_mfa_factors::Entity::delete_many()
+            .filter(
+                Condition::all()
+                    .add(crate::data::sys_user_mfa_factors::Column::TenantId.eq(tid))
+                    .add(crate::data::sys_user_mfa_factors::Column::UserId.eq(uid))
+                    .add(crate::data::sys_user_mfa_factors::Column::Id.eq(id)),
+            )
+            .exec(&self.state.db)
+            .await
+            .map_err(|e| internal_error(format!("db: {e}")))?;
+        Ok(pbjson_types::Empty {})
+    }
+
+    async fn verify_m_f_a_challenge(
+        &self,
+        ctx: rushwind_http_binding::ctx::RequestContext,
+        req: VerifyMfaChallengeRequest,
+    ) -> Result<LoginResponse, crate::state::StatusError> {
+        let op_id = req.operation_id.clone();
+        // Peek the challenge (deleted only on success).
+        let payload: UserTokenPayload = {
+            let mut conn = self.state.redis.clone();
+            let raw: Option<String> =
+                redis::AsyncCommands::get(&mut conn, format!("mfa:login:{op_id}"))
+                    .await
+                    .ok()
+                    .flatten();
+            match raw {
+                Some(raw) => {
+                    let value: serde_json::Value =
+                        serde_json::from_str(&raw).map_err(|e| internal_error(e.to_string()))?;
+                    let username = value["payload"]["username"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string();
+                    ctx.add_reply_header("X-Audit-Username", username);
+                    serde_json::from_value(value["payload"].clone())
+                        .map_err(|e| internal_error(e.to_string()))?
+                }
+                None => {
+                    return Err(status_error(
+                        "FORBIDDEN",
+                        "invalid or expired mfa challenge",
+                    ));
+                }
+            }
+        };
+
+        let code = match req.response.as_ref() {
+            Some(verify_mfa_challenge_request::Response::TotpCode(code)) => code.clone(),
+            _ => String::new(),
+        };
+
+        let factor = self
+            .factor_for(payload.tenant_id, payload.user_id)
+            .await
+            .ok_or_else(|| status_error("FORBIDDEN", "mfa is not enrolled"))?;
+        let secret =
+            crate::crypto::decrypt_if_needed(&factor.secret_hash).map_err(internal_error)?;
+        if !crate::crypto::totp_verify(&secret, &code) {
+            // Failure counting: 3 strikes kill the challenge.
+            let mut conn = self.state.redis.clone();
+            let fail_key = format!("mfa:loginfail:{op_id}");
+            let fails: i64 = redis::AsyncCommands::incr(&mut conn, &fail_key, 1i64)
+                .await
+                .unwrap_or(1);
+            let _: Result<(), _> = redis::AsyncCommands::expire(&mut conn, &fail_key, 300i64).await;
+            if fails >= 3 {
+                let _: Result<i64, _> =
+                    redis::AsyncCommands::del(&mut conn, format!("mfa:login:{op_id}")).await;
+                let _: Result<i64, _> = redis::AsyncCommands::del(&mut conn, &fail_key).await;
+                return Err(status_error(
+                    "FORBIDDEN",
+                    "too many invalid mfa attempts, please login again",
+                ));
+            }
+            return Err(status_error("FORBIDDEN", "invalid mfa code"));
+        }
+
+        // Success: single-use (delete challenge + failures), last-used stamp,
+        // rate limiter reset, then the token pair.
+        let mut conn = self.state.redis.clone();
+        let _: Result<i64, _> =
+            redis::AsyncCommands::del(&mut conn, format!("mfa:login:{op_id}")).await;
+        let _: Result<i64, _> =
+            redis::AsyncCommands::del(&mut conn, format!("mfa:loginfail:{op_id}")).await;
+        {
+            let mut active: crate::data::sys_user_mfa_factors::ActiveModel = factor.into();
+            active.last_used_at = Set(Some(crate::data::now()));
+            let _ = active.update(&self.state.db).await;
+        }
+        crate::ratelimit::reset(&self.state.redis, &ctx.ip, &payload.username).await;
+        self.issue_after_verify(&ctx, &payload).await
+    }
+}

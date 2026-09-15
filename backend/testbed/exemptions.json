@@ -1,0 +1,16 @@
+{
+  "exemptions": [
+    {
+      "class": "head-on-get",
+      "note": "已登记微分歧（docs/binding-spec.md）：axum 的 MethodFilter::GET 同时接受 HEAD，gorilla mux 拒绝（405）。HEAD 探针仅量化记录两侧差异，不判失败。"
+    },
+    {
+      "class": "path-bind-post-auth",
+      "note": "已登记排序分歧（docs/binding-spec.md §2.3）：参照系在鉴权中间件之前绑定路径变量（BindVars 于前置段执行），而 axum 中间件无法访问路由捕获值，故本复刻只能在鉴权层之后绑定。仅当『路径变量值畸形』且『令牌缺失/无效』同时发生时两者分歧（参照 400/CODEC 先于 401，复刻 401 在前）；令牌有效时两侧同为 400/CODEC。axum 无中间件可见路径捕获 API，属框架级不可对位项。"
+    },
+    {
+      "class": "router-shadow",
+      "note": "已登记路由优先级分歧（docs/binding-spec.md §1）：参照系 gorilla mux 按先注册者先匹配，{var} 模式路由吸收更晚注册的字面路径；axum/matchit 静态段优先。复刻侧按 gorilla 遮蔽分析跳过被遮蔽绑定后，请求两侧都落在遮蔽它的 {var} 路由上——但该路由的路径变量对字面段取值必然畸形，触发『路径变量绑定先/后于鉴权』这一已豁免排序分歧（参照 400/CODEC 先行，复刻 401 先行）。遮蔽集由 admin-gen 守卫测试硬钉。"
+    }
+  ]
+}

@@ -1,0 +1,161 @@
+syntax = "proto3";
+
+package notification_channel.service.v1;
+
+import "gnostic/openapi/v3/annotations.proto";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/field_mask.proto";
+
+import "pagination/v1/pagination.proto";
+
+// 通知渠道服务（平台级配置；一期实现 EMAIL 渠道）
+service NotificationChannelService {
+  // 查询通知渠道列表
+  rpc List (pagination.PagingRequest) returns (ListNotificationChannelResponse) {}
+
+  // 查询通知渠道详情
+  rpc Get (GetNotificationChannelRequest) returns (NotificationChannel) {}
+
+  // 创建通知渠道
+  rpc Create (CreateNotificationChannelRequest) returns (NotificationChannel) {}
+
+  // 更新通知渠道
+  rpc Update (UpdateNotificationChannelRequest) returns (google.protobuf.Empty) {}
+
+  // 删除通知渠道
+  rpc Delete (DeleteNotificationChannelRequest) returns (google.protobuf.Empty) {}
+
+  // 向指定邮箱发送测试邮件（验证渠道配置）
+  rpc SendTestEmail (SendTestEmailRequest) returns (google.protobuf.Empty) {}
+}
+
+// 通知渠道
+message NotificationChannel {
+  // 渠道类型
+  enum Type {
+    EMAIL = 0;    // 邮件（SMTP）
+    WEBHOOK = 1;  // Webhook（预留）
+  }
+
+  // SMTP 加密方式
+  enum TlsMode {
+    NONE = 0;      // 明文
+    START_TLS = 1; // STARTTLS（通常 587 端口）
+    SSL = 2;       // SSL/TLS（通常 465 端口）
+  }
+
+  optional uint32 id = 1 [
+    json_name = "id",
+    (gnostic.openapi.v3.property) = { description: "渠道ID" }
+  ]; // 渠道ID
+
+  optional string name = 2 [
+    json_name = "name",
+    (gnostic.openapi.v3.property) = { description: "渠道名称" }
+  ]; // 渠道名称
+
+  optional Type type = 3 [
+    json_name = "type",
+    (gnostic.openapi.v3.property) = { description: "渠道类型" }
+  ]; // 渠道类型
+
+  optional string smtp_host = 10 [
+    json_name = "smtpHost",
+    (gnostic.openapi.v3.property) = { description: "SMTP 服务器地址" }
+  ]; // SMTP 服务器地址
+
+  optional uint32 smtp_port = 11 [
+    json_name = "smtpPort",
+    (gnostic.openapi.v3.property) = { description: "SMTP 端口" }
+  ]; // SMTP 端口
+
+  optional string smtp_username = 12 [
+    json_name = "smtpUsername",
+    (gnostic.openapi.v3.property) = { description: "SMTP 用户名" }
+  ]; // SMTP 用户名
+
+  // 密码不回传：仅创建/更新时写入；hasPassword 标识是否已配置
+  optional bool has_password = 13 [
+    json_name = "hasPassword",
+    (gnostic.openapi.v3.property) = { description: "是否已配置密码" }
+  ]; // 是否已配置密码
+
+  optional string smtp_from = 14 [
+    json_name = "smtpFrom",
+    (gnostic.openapi.v3.property) = { description: "发件人地址" }
+  ]; // 发件人地址
+
+  optional TlsMode smtp_tls = 15 [
+    json_name = "smtpTls",
+    (gnostic.openapi.v3.property) = { description: "加密方式" }
+  ]; // 加密方式
+
+  optional bool enabled = 20 [
+    json_name = "enabled",
+    (gnostic.openapi.v3.property) = { description: "是否启用" }
+  ]; // 是否启用
+
+  optional string remark = 21 [
+    json_name = "remark",
+    (gnostic.openapi.v3.property) = { description: "备注" }
+  ]; // 备注
+
+  optional uint32 created_by = 100 [json_name = "createdBy"];
+  optional uint32 updated_by = 101 [json_name = "updatedBy"];
+
+  optional google.protobuf.Timestamp created_at = 200 [json_name = "createdAt"];
+  optional google.protobuf.Timestamp updated_at = 201 [json_name = "updatedAt"];
+}
+
+// 查询通知渠道列表 - 回应
+message ListNotificationChannelResponse {
+  repeated NotificationChannel items = 1;
+  uint64 total = 2;
+}
+
+// 查询通知渠道详情 - 请求
+message GetNotificationChannelRequest {
+  uint32 id = 1;
+}
+
+// 创建通知渠道 - 请求
+message CreateNotificationChannelRequest {
+  NotificationChannel data = 1;
+  // 明文密码（服务端加密存储，不落日志）
+  optional string password = 2 [
+    json_name = "password",
+    (gnostic.openapi.v3.property) = { description: "SMTP 密码/授权码" }
+  ];
+}
+
+// 更新通知渠道 - 请求
+message UpdateNotificationChannelRequest {
+  uint32 id = 1;
+  NotificationChannel data = 2;
+  google.protobuf.FieldMask update_mask = 3 [json_name = "updateMask"];
+  // 明文密码；留空表示不修改已存密码
+  optional string password = 4 [
+    json_name = "password",
+    (gnostic.openapi.v3.property) = { description: "SMTP 密码/授权码，留空不修改" }
+  ];
+}
+
+// 删除通知渠道 - 请求
+message DeleteNotificationChannelRequest {
+  uint32 id = 1;
+}
+
+// 发送测试邮件 - 请求
+message SendTestEmailRequest {
+  uint32 id = 1 [
+    json_name = "id",
+    (gnostic.openapi.v3.property) = { description: "渠道ID" }
+  ]; // 渠道ID
+
+  string recipient = 2 [
+    json_name = "recipient",
+    (gnostic.openapi.v3.property) = { description: "测试收件人邮箱" }
+  ]; // 测试收件人邮箱
+}

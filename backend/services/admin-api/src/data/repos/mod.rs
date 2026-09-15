@@ -3,29 +3,28 @@
 //! in services.
 //!
 //! The full repo surface is the data-layer API.
-#![allow(dead_code)]
 
-pub mod access_key;
-pub mod api;
-pub mod audit;
-pub mod config;
-pub mod dict;
-pub mod file;
-pub mod language;
-pub mod login_policy;
-pub mod menu;
-pub mod message;
-pub mod mfa_factor;
-pub mod notification_channel;
-pub mod org_unit;
-pub mod permission;
-pub mod plan;
-pub mod position;
-pub mod role;
-pub mod script;
-pub mod task;
-pub mod tenant;
-pub mod user;
+mod access_key;
+mod api;
+mod audit;
+mod config;
+mod dict;
+mod file;
+mod language;
+mod login_policy;
+mod menu;
+mod message;
+mod mfa_factor;
+mod notification_channel;
+mod org_unit;
+mod permission;
+mod plan;
+mod position;
+mod role;
+mod script;
+mod task;
+mod tenant;
+mod user;
 
 pub use access_key::AccessKeyRepo;
 pub use api::ApiRepo;

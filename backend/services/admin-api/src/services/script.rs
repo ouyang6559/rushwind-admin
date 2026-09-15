@@ -80,10 +80,8 @@ impl proto::gen::services::ScriptServiceHandlers for ScriptService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListScriptsResponse, StatusError> {
-        let repo = crate::data::repos::ScriptRepo::new(
-            &self.state.db,
-            crate::data::scope::Viewer::system(),
-        );
+        let repo =
+            crate::data::repos::ScriptRepo::new(&self.state.db, crate::data::Viewer::system());
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListScriptsResponse {
             items: rows.into_iter().map(script_proto).collect(),
@@ -263,10 +261,8 @@ impl proto::gen::services::ScriptLogServiceHandlers for ScriptLogService {
     ) -> Result<ListScriptLogsResponse, StatusError> {
         // ScriptLogRepo owns the newest-first ordering; paged_list applies
         // the PagingRequest slice.
-        let repo = crate::data::repos::ScriptLogRepo::new(
-            &self.state.db,
-            crate::data::scope::Viewer::system(),
-        );
+        let repo =
+            crate::data::repos::ScriptLogRepo::new(&self.state.db, crate::data::Viewer::system());
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListScriptLogsResponse {
             items: rows.into_iter().map(script_log_proto).collect(),

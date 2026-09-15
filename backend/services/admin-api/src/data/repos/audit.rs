@@ -7,7 +7,10 @@ use sea_orm::{DatabaseConnection, EntityTrait, PaginatorTrait, QueryOrder, Query
 use crate::paging as admin_paging;
 use proto::proto::pagination::PagingRequest;
 
-use crate::data::audit;
+use crate::data::{
+    sys_api_audit_logs, sys_data_access_audit_logs, sys_login_audit_logs, sys_operation_audit_logs,
+    sys_permission_audit_logs, sys_policy_evaluation_logs,
+};
 use crate::state::{db_err, StatusError};
 
 pub struct AuditRepo<'a> {
@@ -20,9 +23,9 @@ macro_rules! audit_suite {
             &self,
             limit: u64,
             offset: u64,
-        ) -> Result<Vec<audit::$entity::Model>, StatusError> {
-            audit::$entity::Entity::find()
-                .order_by_desc(audit::$entity::Column::CreatedAt)
+        ) -> Result<Vec<$entity::Model>, StatusError> {
+            $entity::Entity::find()
+                .order_by_desc($entity::Column::CreatedAt)
                 .offset(offset)
                 .limit(limit)
                 .all(self.db)
@@ -31,10 +34,7 @@ macro_rules! audit_suite {
         }
 
         pub async fn $count(&self) -> u64 {
-            audit::$entity::Entity::find()
-                .count(self.db)
-                .await
-                .unwrap_or(0)
+            $entity::Entity::find().count(self.db).await.unwrap_or(0)
         }
     };
 }
@@ -65,18 +65,14 @@ macro_rules! audit_paged {
         pub async fn $paged(
             &self,
             req: &PagingRequest,
-        ) -> Result<(Vec<audit::$entity::Model>, u64), StatusError> {
-            let base =
-                audit::$entity::Entity::find().order_by_desc(audit::$entity::Column::CreatedAt);
+        ) -> Result<(Vec<$entity::Model>, u64), StatusError> {
+            let base = $entity::Entity::find().order_by_desc($entity::Column::CreatedAt);
             let (paged, paging) = admin_paging::apply(base, req);
             let rows = paged.all(self.db).await.map_err(db_err)?;
             let total = if paging.no_paging {
                 rows.len() as u64
             } else {
-                audit::$entity::Entity::find()
-                    .count(self.db)
-                    .await
-                    .unwrap_or(0)
+                $entity::Entity::find().count(self.db).await.unwrap_or(0)
             };
             Ok((rows, total))
         }

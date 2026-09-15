@@ -12,7 +12,7 @@ use proto::proto::permission::service::v1::{
     GetPolicyEvaluationLogRequest, ListPolicyEvaluationLogResponse, PolicyEvaluationLog,
 };
 
-fn log_proto(r: crate::data::audit::sys_policy_evaluation_logs::Model) -> PolicyEvaluationLog {
+fn log_proto(r: crate::data::sys_policy_evaluation_logs::Model) -> PolicyEvaluationLog {
     PolicyEvaluationLog {
         id: Some(r.id),
         tenant_id: r.tenant_id,
@@ -69,7 +69,7 @@ impl proto::gen::services::PolicyEvaluationLogServiceHandlers for PolicyEvaluati
                 "query_by required",
             ));
         };
-        let row = crate::data::audit::sys_policy_evaluation_logs::Entity::find_by_id(id)
+        let row = crate::data::sys_policy_evaluation_logs::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
             .map_err(db_err)?

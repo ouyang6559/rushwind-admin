@@ -101,10 +101,8 @@ impl proto::gen::services::TaskServiceHandlers for TaskService {
         req: PagingRequest,
     ) -> Result<ListTaskResponse, StatusError> {
         // Listing rides the repo: tenancy predicates live in the data layer.
-        let repo = crate::data::repos::TaskRepo::new(
-            &self.state.db,
-            crate::data::scope::Viewer::from_ctx(&ctx),
-        );
+        let repo =
+            crate::data::repos::TaskRepo::new(&self.state.db, crate::data::Viewer::from_ctx(&ctx));
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListTaskResponse {
             items: rows.into_iter().map(task_proto).collect(),

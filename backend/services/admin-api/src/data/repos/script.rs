@@ -5,7 +5,7 @@ use sea_orm::{
     ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
 };
 
-use crate::data::scope::Viewer;
+use crate::data::Viewer;
 use crate::data::{sys_script_logs, sys_scripts};
 use crate::state::{db_err, StatusError};
 

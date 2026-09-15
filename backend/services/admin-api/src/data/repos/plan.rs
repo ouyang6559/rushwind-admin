@@ -3,7 +3,7 @@
 use sea_orm::sea_query::Condition;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 
-use crate::data::scope::Viewer;
+use crate::data::Viewer;
 use crate::data::{sys_plan_modules, sys_plan_quotas, sys_plans};
 use crate::state::{db_err, StatusError};
 

@@ -126,10 +126,8 @@ impl proto::gen::services::FileServiceHandlers for FileService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListFileResponse, StatusError> {
-        let repo = crate::data::repos::FileRepo::new(
-            &self.state.db,
-            crate::data::scope::Viewer::from_ctx(&ctx),
-        );
+        let repo =
+            crate::data::repos::FileRepo::new(&self.state.db, crate::data::Viewer::from_ctx(&ctx));
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListFileResponse {
             items: rows.into_iter().map(file_proto).collect(),

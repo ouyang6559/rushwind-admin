@@ -4,7 +4,7 @@
 use sea_orm::sea_query::Condition;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 
-use crate::data::scope::Viewer;
+use crate::data::Viewer;
 use crate::data::{sys_dict_entries, sys_dict_types};
 use crate::state::{db_err, StatusError};
 

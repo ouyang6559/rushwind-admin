@@ -9,7 +9,7 @@ use sea_orm::{
     QueryOrder, Set,
 };
 
-use crate::data::scope::Viewer;
+use crate::data::Viewer;
 use crate::data::{sys_user_credentials as credentials, sys_user_roles, sys_users as users};
 use crate::state::{db_err, internal_error, status_error, StatusError};
 

@@ -59,7 +59,7 @@ impl proto::gen::services::NotificationChannelServiceHandlers for NotificationCh
     ) -> Result<ListNotificationChannelResponse, StatusError> {
         let repo = crate::data::repos::NotificationChannelRepo::new(
             &self.state.db,
-            crate::data::scope::Viewer::system(),
+            crate::data::Viewer::system(),
         );
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListNotificationChannelResponse {

@@ -145,8 +145,7 @@ impl proto::gen::services::PlanServiceHandlers for PlanService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListPlanResponse, StatusError> {
-        let repo =
-            crate::data::repos::PlanRepo::new(&self.state.db, crate::data::scope::Viewer::system());
+        let repo = crate::data::repos::PlanRepo::new(&self.state.db, crate::data::Viewer::system());
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListPlanResponse {
             items: rows.into_iter().map(plan_proto).collect(),
@@ -277,10 +276,8 @@ impl proto::gen::services::PlanModuleServiceHandlers for PlanModuleService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListPlanModuleResponse, StatusError> {
-        let repo = crate::data::repos::PlanModuleRepo::new(
-            &self.state.db,
-            crate::data::scope::Viewer::system(),
-        );
+        let repo =
+            crate::data::repos::PlanModuleRepo::new(&self.state.db, crate::data::Viewer::system());
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListPlanModuleResponse {
             items: rows.into_iter().map(plan_module_proto).collect(),
@@ -381,10 +378,8 @@ impl proto::gen::services::PlanQuotaServiceHandlers for PlanQuotaService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListPlanQuotaResponse, StatusError> {
-        let repo = crate::data::repos::PlanQuotaRepo::new(
-            &self.state.db,
-            crate::data::scope::Viewer::system(),
-        );
+        let repo =
+            crate::data::repos::PlanQuotaRepo::new(&self.state.db, crate::data::Viewer::system());
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListPlanQuotaResponse {
             items: rows.into_iter().map(plan_quota_proto).collect(),

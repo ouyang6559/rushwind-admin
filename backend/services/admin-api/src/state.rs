@@ -20,7 +20,7 @@ pub struct AppState {
     pub jwt: rushwind_authn_jwt::JwtAuthenticator,
     pub tokens: TokenStore,
     /// The SSE notification hub (`/events` subscribers).
-    pub hub: crate::server::sse_server::Hub,
+    pub hub: crate::server::sse::Hub,
 }
 
 impl AppState {
@@ -75,7 +75,7 @@ impl AppState {
             authenticator,
             jwt,
             tokens,
-            hub: crate::server::sse_server::Hub::default(),
+            hub: crate::server::sse::Hub::default(),
         })
     }
 }

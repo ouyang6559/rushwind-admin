@@ -86,7 +86,7 @@ fn menu_proto(r: crate::data::sys_menus::Model) -> Menu {
         meta: r
             .meta
             .as_ref()
-            .and_then(crate::services::admin_portal::menu_meta_from_json),
+            .and_then(crate::services::menu_meta_from_json),
         module: r.module.as_deref().map(module_to_proto),
         parent_id: r.parent_id,
         children: Vec::new(),
@@ -133,7 +133,7 @@ impl MenuService {
             a.parent_id = Set(if v == 0 { None } else { Some(v) });
         }
         if let Some(meta) = &data.meta {
-            a.meta = Set(Some(crate::services::admin_portal::menu_meta_to_json(meta)));
+            a.meta = Set(Some(crate::services::menu_meta_to_json(meta)));
         }
     }
 }
@@ -145,8 +145,7 @@ impl proto::gen::services::MenuServiceHandlers for MenuService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListMenuResponse, StatusError> {
-        let repo =
-            crate::data::repos::MenuRepo::new(&self.state.db, crate::data::scope::Viewer::system());
+        let repo = crate::data::repos::MenuRepo::new(&self.state.db, crate::data::Viewer::system());
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListMenuResponse {
             items: rows.into_iter().map(menu_proto).collect(),

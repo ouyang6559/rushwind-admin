@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use admin_api::config::Config;
 use admin_api::seed;
-use admin_api::server::{apalis_server, rest_server, sse_server};
+use admin_api::server::{apalis, rest, sse};
 use admin_api::state::AppState;
 use rushwind_core::App;
 use rushwind_transport::StopSignal;
@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The task queue transport: apalis Postgres storage + worker,
     // registered into the same lifecycle as REST + SSE. The scheduler
     // below is the cron producer that enqueues due jobs.
-    let task_server = Arc::new(apalis_server::ApalisServer::new(
+    let task_server = Arc::new(apalis::ApalisServer::new(
         Arc::clone(&state),
         &state.cfg.database_source,
         "default",
@@ -45,19 +45,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The periodic cron producer: enabled PERIODIC rows + the two system
     // crons enqueue jobs on cron match.
 
-    let app = rest_server::build_router(Arc::clone(&state));
+    let app = rest::build_router(Arc::clone(&state));
 
     // Listener addresses ride server.yaml (`server.rest.addr` /
     // `server.sse.addr`, ":7788" host-any form).
     let rest_addr = parse_addr(&state.cfg.rest_addr, 7788);
     let sse_addr = parse_addr(&state.cfg.sse_addr, 7789);
 
-    let sse_server = sse_server::new_sse_server(Arc::clone(&state), sse_addr)
+    let sse_server = sse::new_sse_server(Arc::clone(&state), sse_addr)
         .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
 
     // The cron producer transport: static system crons + the DB-driven
     // PERIODIC wildcard job.
-    let cron_server = apalis_server::cron_server(Arc::clone(&state), Arc::clone(&task_server));
+    let cron_server = apalis::cron_server(Arc::clone(&state), Arc::clone(&task_server));
 
     let server = AxumServer::new(rest_addr, app)?;
     let lifecycle = App::builder()

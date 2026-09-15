@@ -4,8 +4,8 @@
 use sea_orm::sea_query::Condition;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter};
 
-use crate::data::scope::Viewer;
 use crate::data::sys_configs as entity;
+use crate::data::Viewer;
 use crate::state::{db_err, StatusError};
 
 pub struct ConfigRepo<'a> {

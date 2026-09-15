@@ -71,7 +71,7 @@ impl AccessKeyServiceHandlers for AccessKeyService {
             .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))?;
         let repo = crate::data::repos::AccessKeyRepo::new(
             &self.state.db,
-            crate::data::scope::Viewer::from_ctx(&ctx),
+            crate::data::Viewer::from_ctx(&ctx),
         );
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListAccessKeyResponse {

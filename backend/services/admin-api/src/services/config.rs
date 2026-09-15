@@ -60,10 +60,8 @@ impl proto::gen::services::ConfigServiceHandlers for ConfigService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListConfigResponse, StatusError> {
-        let repo = crate::data::repos::ConfigRepo::new(
-            &self.state.db,
-            crate::data::scope::Viewer::system(),
-        );
+        let repo =
+            crate::data::repos::ConfigRepo::new(&self.state.db, crate::data::Viewer::system());
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListConfigResponse {
             items: rows.into_iter().map(config_proto).collect(),

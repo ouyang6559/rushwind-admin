@@ -132,7 +132,7 @@ impl proto::gen::services::InternalMessageServiceHandlers for InternalMessageSer
     ) -> Result<ListInternalMessageResponse, StatusError> {
         let repo = crate::data::repos::InternalMessageRepo::new(
             &self.state.db,
-            crate::data::scope::Viewer::from_ctx(&ctx),
+            crate::data::Viewer::from_ctx(&ctx),
         );
         let (rows, total) = repo.paged_list(tenant_of(&ctx), &req).await?;
         Ok(ListInternalMessageResponse {
@@ -277,9 +277,9 @@ impl proto::gen::services::InternalMessageServiceHandlers for InternalMessageSer
             // SSE push per recipient (publishNotification: stream = userId,
             // event = notification, data = the recipient protojson).
             for uid in chunk {
-                crate::server::sse_server::publish_recipient(
+                crate::server::sse::publish_recipient(
                     &self.state.hub,
-                    &crate::server::sse_server::NotificationPayload {
+                    &crate::server::sse::NotificationPayload {
                         id: message.id,
                         message_id: message.id,
                         recipient_user_id: *uid,
@@ -464,7 +464,7 @@ impl proto::gen::services::InternalMessageRecipientServiceHandlers
         let payload = operator_of(&ctx)?;
         let repo = crate::data::repos::InternalMessageRecipientRepo::new(
             &self.state.db,
-            crate::data::scope::Viewer::from_ctx(&ctx),
+            crate::data::Viewer::from_ctx(&ctx),
         );
         let (rows, total) = repo.paged_inbox(payload.user_id, &req).await?;
         // One IN query backfills the messages (N+1 guard).

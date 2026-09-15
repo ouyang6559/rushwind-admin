@@ -7,7 +7,7 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
 };
 
-use crate::data::scope::Viewer;
+use crate::data::Viewer;
 use crate::data::{sys_role_permissions, sys_roles as roles};
 use crate::state::{db_err, status_error, StatusError};
 

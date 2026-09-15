@@ -11,7 +11,7 @@ use proto::proto::audit::service::v1::{
 };
 use proto::proto::pagination::PagingRequest;
 
-fn log_proto(r: crate::data::audit::sys_api_audit_logs::Model) -> ApiAuditLog {
+fn log_proto(r: crate::data::sys_api_audit_logs::Model) -> ApiAuditLog {
     ApiAuditLog {
         id: Some(r.id),
         tenant_id: r.tenant_id,
@@ -77,7 +77,7 @@ impl proto::gen::services::ApiAuditLogServiceHandlers for ApiAuditLogService {
                 "query_by required",
             ));
         };
-        let row = crate::data::audit::sys_api_audit_logs::Entity::find_by_id(id)
+        let row = crate::data::sys_api_audit_logs::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
             .map_err(db_err)?

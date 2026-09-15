@@ -299,13 +299,16 @@ impl TenantService {
         wipe!(internal_message_categories);
         wipe!(files);
         // The audit tables live under the audit submodule.
-        use crate::data::audit;
-        wipe!(audit::sys_api_audit_logs);
-        wipe!(audit::sys_operation_audit_logs);
-        wipe!(audit::sys_login_audit_logs);
-        wipe!(audit::sys_data_access_audit_logs);
-        wipe!(audit::sys_permission_audit_logs);
-        wipe!(audit::sys_policy_evaluation_logs);
+        use crate::data::{
+            sys_api_audit_logs, sys_data_access_audit_logs, sys_login_audit_logs,
+            sys_operation_audit_logs, sys_permission_audit_logs, sys_policy_evaluation_logs,
+        };
+        wipe!(sys_api_audit_logs);
+        wipe!(sys_operation_audit_logs);
+        wipe!(sys_login_audit_logs);
+        wipe!(sys_data_access_audit_logs);
+        wipe!(sys_permission_audit_logs);
+        wipe!(sys_policy_evaluation_logs);
         Ok(())
     }
 }

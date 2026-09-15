@@ -81,7 +81,7 @@ impl proto::gen::services::LoginPolicyServiceHandlers for LoginPolicyService {
     ) -> Result<ListLoginPolicyResponse, StatusError> {
         let repo = crate::data::repos::LoginPolicyRepo::new(
             &self.state.db,
-            crate::data::scope::Viewer::from_ctx(&ctx),
+            crate::data::Viewer::from_ctx(&ctx),
         );
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListLoginPolicyResponse {

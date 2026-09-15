@@ -395,7 +395,7 @@ pub async fn layer(
                 &request_id,
                 score,
             );
-            let row = crate::data::audit::sys_login_audit_logs::ActiveModel {
+            let row = crate::data::sys_login_audit_logs::ActiveModel {
                 tenant_id: Set(Some(tid)),
                 user_id: Set(Some(uid)),
                 username: Set(Some(login_username.clone())),
@@ -433,7 +433,7 @@ pub async fn layer(
 
         // ---- api audit (all except Login / VerifyMFAChallenge) ----
         if !SKIP_API_AUDIT.contains(&operation) {
-            let row = crate::data::audit::sys_api_audit_logs::ActiveModel {
+            let row = crate::data::sys_api_audit_logs::ActiveModel {
                 tenant_id: Set(Some(tid)),
                 user_id: Set(Some(uid)),
                 username: Set(Some(username.clone())),
@@ -492,7 +492,7 @@ pub async fn layer(
                     "Delete" | "BatchDelete" => "DELETE",
                     _ => "OTHER",
                 };
-                let row = crate::data::audit::sys_operation_audit_logs::ActiveModel {
+                let row = crate::data::sys_operation_audit_logs::ActiveModel {
                     tenant_id: Set(Some(tid)),
                     user_id: Set(Some(uid)),
                     username: Set(Some(username.clone())),
@@ -516,7 +516,7 @@ pub async fn layer(
             // Permission audit: needs a parsed target type.
             if !target_type.is_empty() {
                 let target_name = target_name_from_body(&body);
-                let row = crate::data::audit::sys_permission_audit_logs::ActiveModel {
+                let row = crate::data::sys_permission_audit_logs::ActiveModel {
                     tenant_id: Set(Some(tid)),
                     operator_id: Set(Some(uid)),
                     operator_name: Set(Some(username.clone())),

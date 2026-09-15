@@ -32,17 +32,17 @@ impl proto::gen::services::DashboardServiceHandlers for DashboardService {
             .await
             .unwrap_or(0) as u32;
         let today = crate::data::now().date();
-        let today_login_count = crate::data::audit::sys_login_audit_logs::Entity::find()
+        let today_login_count = crate::data::sys_login_audit_logs::Entity::find()
             .filter(
-                crate::data::audit::sys_login_audit_logs::Column::CreatedAt
+                crate::data::sys_login_audit_logs::Column::CreatedAt
                     .gte(today.and_hms_opt(0, 0, 0)),
             )
             .count(&self.state.db)
             .await
             .unwrap_or(0) as u32;
-        let today_operation_count = crate::data::audit::sys_operation_audit_logs::Entity::find()
+        let today_operation_count = crate::data::sys_operation_audit_logs::Entity::find()
             .filter(
-                crate::data::audit::sys_operation_audit_logs::Column::CreatedAt
+                crate::data::sys_operation_audit_logs::Column::CreatedAt
                     .gte(today.and_hms_opt(0, 0, 0)),
             )
             .count(&self.state.db)
@@ -62,9 +62,9 @@ impl proto::gen::services::DashboardServiceHandlers for DashboardService {
         req: GetLoginTrendRequest,
     ) -> Result<LoginTrendResponse, StatusError> {
         let days = req.days.unwrap_or(7).clamp(1, 90) as i64;
-        let rows = crate::data::audit::sys_login_audit_logs::Entity::find()
+        let rows = crate::data::sys_login_audit_logs::Entity::find()
             .filter(
-                crate::data::audit::sys_login_audit_logs::Column::CreatedAt
+                crate::data::sys_login_audit_logs::Column::CreatedAt
                     .gte(crate::data::now().date() - chrono::Duration::days(days)),
             )
             .all(&self.state.db)
@@ -97,7 +97,7 @@ impl proto::gen::services::DashboardServiceHandlers for DashboardService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         _req: Empty,
     ) -> Result<ActionDistributionResponse, StatusError> {
-        let rows = crate::data::audit::sys_operation_audit_logs::Entity::find()
+        let rows = crate::data::sys_operation_audit_logs::Entity::find()
             .all(&self.state.db)
             .await
             .map_err(db_err)?;
@@ -121,7 +121,7 @@ impl proto::gen::services::DashboardServiceHandlers for DashboardService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         _req: Empty,
     ) -> Result<StatusDistributionResponse, StatusError> {
-        let rows = crate::data::audit::sys_login_audit_logs::Entity::find()
+        let rows = crate::data::sys_login_audit_logs::Entity::find()
             .all(&self.state.db)
             .await
             .map_err(db_err)?;

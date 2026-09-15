@@ -50,7 +50,7 @@ impl proto::gen::services::DictEntryServiceHandlers for DictEntryService {
         let _tid = tenant_of(&ctx);
         let repo = crate::data::repos::DictEntryRepo::new(
             &self.state.db,
-            crate::data::scope::Viewer::from_ctx(&ctx),
+            crate::data::Viewer::from_ctx(&ctx),
         );
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListDictEntryResponse {

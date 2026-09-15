@@ -6,7 +6,7 @@ use sea_orm::sea_query::Condition;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::data::repos::DictTypeRepo;
-use crate::data::scope::Viewer;
+use crate::data::Viewer;
 use crate::state::{
     db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };

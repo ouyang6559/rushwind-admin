@@ -7,7 +7,7 @@ use sea_orm::sea_query::Condition;
 use sea_orm::{ActiveModelTrait, Set};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 
-use crate::data::scope::Viewer;
+use crate::data::Viewer;
 use crate::data::{internal_message_recipients, internal_messages};
 use crate::state::{db_err, StatusError};
 
@@ -207,12 +207,15 @@ impl<'a> InternalMessageRecipientRepo<'a> {
     }
 }
 
+#[expect(dead_code)]
 pub struct InternalMessageCategoryRepo<'a> {
     pub db: &'a DatabaseConnection,
     #[allow(dead_code)]
     pub viewer: Viewer,
 }
 
+// Pending service wiring: the consuming service still queries inline; this repo goes live when that lands, and the expect below then fires so the attribute gets removed.
+#[expect(dead_code)]
 impl<'a> InternalMessageCategoryRepo<'a> {
     pub fn new(db: &'a DatabaseConnection, viewer: Viewer) -> Self {
         Self { db, viewer }

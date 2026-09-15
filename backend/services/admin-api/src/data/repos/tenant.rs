@@ -5,17 +5,20 @@
 use sea_orm::sea_query::Condition;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter};
 
-use crate::data::scope::Viewer;
 use crate::data::sys_tenants as tenants;
 use crate::data::sys_users as users;
+use crate::data::Viewer;
 use crate::state::{db_err, StatusError};
 
+#[expect(dead_code)]
 pub struct TenantRepo<'a> {
     pub db: &'a DatabaseConnection,
     #[allow(dead_code)]
     pub viewer: Viewer,
 }
 
+// Pending service wiring: the consuming service still queries inline; this repo goes live when that lands, and the expect below then fires so the attribute gets removed.
+#[expect(dead_code)]
 impl<'a> TenantRepo<'a> {
     pub fn new(db: &'a DatabaseConnection, viewer: Viewer) -> Self {
         Self { db, viewer }

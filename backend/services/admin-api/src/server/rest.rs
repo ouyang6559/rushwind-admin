@@ -430,7 +430,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
 
     // The docs surface (Swagger UI / Redoc / raw spec), switched by
     // server.rest.enable_swagger / enable_redoc.
-    app = app.merge(crate::server::docs_server::router(
+    app = app.merge(crate::server::docs::router(
         state.cfg.enable_swagger,
         state.cfg.enable_redoc,
     ));

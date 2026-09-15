@@ -415,38 +415,12 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     );
     let mut app = router_pub.merge(router_gate);
 
-    // API docs (server.rest.enable_swagger): the embedded OpenAPI spec at
-    // /q/openapi.yaml, Swagger UI at /q/swagger-ui, Redoc at /q/redoc.
-    if state.cfg.enable_swagger {
-        app = app
-            .route(
-                "/q/openapi.yaml",
-                axum::routing::get(|| async {
-                    (
-                        [(header::CONTENT_TYPE, "text/yaml; charset=utf-8")],
-                        crate::assets::OPENAPI_DATA.to_string(),
-                    )
-                }),
-            )
-            .route(
-                "/q/swagger-ui",
-                axum::routing::get(|| async {
-                    (
-                        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-                        SWAGGER_UI_HTML.to_string(),
-                    )
-                }),
-            )
-            .route(
-                "/q/redoc",
-                axum::routing::get(|| async {
-                    (
-                        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-                        REDOC_HTML.to_string(),
-                    )
-                }),
-            );
-    }
+    // The docs surface (Swagger UI / Redoc / raw spec), switched by
+    // server.rest.enable_swagger / enable_redoc.
+    app = app.merge(crate::docs_server::router(
+        state.cfg.enable_swagger,
+        state.cfg.enable_redoc,
+    ));
 
     // The audit-write layer:
     // post-handler persistence into the audit tables, outermost so it
@@ -479,37 +453,3 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         ))
         .wrap(app)
 }
-
-const SWAGGER_UI_HTML: &str = r##"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Admin API — Swagger UI</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"/>
-</head>
-<body>
-<div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-<script>
-  SwaggerUIBundle({
-    url: "/q/openapi.yaml",
-    dom_id: "#swagger-ui",
-    deepLinking: true,
-    withCredentials: true,
-  });
-</script>
-</body>
-</html>"##;
-
-const REDOC_HTML: &str = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Admin API — Redoc</title>
-  <style>body { margin: 0; padding: 0; }</style>
-</head>
-<body>
-<redoc spec-url="/q/openapi.yaml"></redoc>
-<script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
-</body>
-</html>"#;

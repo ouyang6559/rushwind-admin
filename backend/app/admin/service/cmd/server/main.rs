@@ -21,6 +21,8 @@ mod paging;
 mod policy;
 #[path = "../../internal/ratelimit.rs"]
 mod ratelimit;
+#[path = "../../internal/server/docs_server.rs"]
+mod docs_server;
 #[path = "../../internal/server/rest_server.rs"]
 mod rest_server;
 #[path = "../../internal/server/apalis_server.rs"]

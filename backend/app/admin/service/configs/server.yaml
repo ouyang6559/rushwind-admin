@@ -3,6 +3,7 @@ server:
     addr: ":7788"
     timeout: 10s
     enable_swagger: true
+    enable_redoc: true
     enable_pprof: true
     cors:
       # 前端 refresh token 走 HttpOnly Cookie（withCredentials=true），

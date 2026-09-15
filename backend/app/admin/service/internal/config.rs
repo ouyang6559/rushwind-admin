@@ -12,6 +12,7 @@ pub struct Config {
     pub rest_addr: String,
     pub rest_timeout_secs: u64,
     pub enable_swagger: bool,
+    pub enable_redoc: bool,
     pub cors_allow_credentials: bool,
     pub cors_headers: Vec<String>,
     pub cors_methods: Vec<String>,
@@ -124,6 +125,8 @@ struct RestSection {
     #[serde(default)]
     enable_swagger: bool,
     #[serde(default)]
+    enable_redoc: bool,
+    #[serde(default)]
     cors: Option<CorsSection>,
 }
 
@@ -225,6 +228,7 @@ impl Config {
             addr: ":7788".into(),
             timeout: String::new(),
             enable_swagger: false,
+            enable_redoc: false,
             cors: None,
         });
         let sse_section = server_section.sse.unwrap_or(SseSection {
@@ -281,6 +285,7 @@ impl Config {
                 .map(|s| s as u64)
                 .unwrap_or(10),
             enable_swagger: rest_section.enable_swagger,
+            enable_redoc: rest_section.enable_redoc,
             cors_allow_credentials: rest_section
                 .cors
                 .as_ref()

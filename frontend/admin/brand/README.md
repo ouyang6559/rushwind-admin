@@ -6,7 +6,7 @@ RushWind 品牌覆写。**品牌覆写是快照唯一被允许的对上游偏离
 | 内容 | 覆写方式 |
 |------|---------|
 | `public/logo.png`（200×200，RushWind R 字徽标） | `overlay/` 整文件覆盖（源：rushwind 仓 `assets/logo/png/icon-512.png` 缩放） |
-| `public/favicon.ico`（16/32/48 多档） | `overlay/` 整文件覆盖（源：rushwind 仓 `assets/logo/favicon.ico`） |
+| `public/favicon.ico`（16/32/48 三档） | `overlay/` 整文件覆盖；**程序化生成**：`tools/make-favicon.py`（PIL+numpy 按 rushwind-icon.svg 几何复绘）。设计要点：不用徽章底（深色标签栏 dark-on-dark 糊团）、无圆角容器（四角全透明）、48/32/16 全用简化加粗形（进风口/尾迹短线在 favicon 尺寸下是游离噪点）、亮渐变直接示人。改几何后 `python tools/make-favicon.py` 重生成（顺带输出 `tools/favicon-preview.png` 深浅底预览） |
 | `src/components/bussiness/AuthLayout/icons/SloganIcon.tsx`（登录页品牌插画） | `overlay/` 整文件覆盖（R 字主标 + 环流 + 风痕动效，青→天→靛渐变） |
 | 品牌文案（系统名 / 版权 / meta / `VITE_APP_TITLE` 等） | `apply-brand.sh` 内逐条显式 sed 替换 |
 

@@ -30,3 +30,7 @@ backend/testbed/reports/
 # via frontend/admin/sync-react.sh and must stay byte-clean)
 frontend/admin/react/node_modules/
 frontend/admin/react/dist/
+frontend/admin/react/.vite/
+
+# Python bytecache (favicon generator diagnostics)
+__pycache__/

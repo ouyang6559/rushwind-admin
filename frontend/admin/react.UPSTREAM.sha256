@@ -249,7 +249,7 @@ b9d934f97689ce4bd127ed9b407c46abf38cd6aae847a73aa067df2bd52a200b  src/layouts/co
 7caeffc69d2cbe1fb36388ebe9eea6965b1a704dfb662c2dc1a4312ed3f5e27e  src/layouts/components/PageContainer/types.ts
 94030649fbda8ff86b3bebe2e04f187c6c51276660079b3b840f67e38070baee  src/layouts/components/PageContainer/utils/breadcrumb-render.tsx
 e335247919851aca7604860818e1b05b8b5c366dd63cd273d6bc657ec484dd28  src/layouts/components/PageContainer/utils/permission.ts
-6943a5f42f62e5739ed05b673fd38b16b650ac1c78c44b11d02350cf9ceb5856  src/locales/en-US/_core/auth.json
+ff3932fb48fa9759a02803c64a26c54f8ab9fdacc97d362ae411abb852936c44  src/locales/en-US/_core/auth.json
 bab1bdbafa94abd7b9f67cd5603d9bcd6926e0a3fe576437e2f1a28af3aca409  src/locales/en-US/_core/common.json
 86717506df15513f82c0dbad534ff6b1a88ac2b9b9b865d057c21cf2d6bb4f6f  src/locales/en-US/_core/editor.json
 1fa757ad886fd4852a08d0defbf67a77136f7dcefcb6f64bf3d751be0643f18c  src/locales/en-US/_core/routes.json
@@ -292,7 +292,7 @@ acfc0ed7b08148608db030926d9349d0e2beb917e45ee58052bf2b790c428d57  src/locales/en
 aca44873d29aa85601995eafa9637925abe7e48a0ee35bcf5108bcd6cb10d4c4  src/locales/en-US/_modules/user.json
 8060fc0c7fb2ee814fb46048d10bfeffe32870577284d011d8f17bc823ded9f0  src/locales/en-US/index.ts
 e04545e431e94ad23299b870a2f2add81fdb056c95aa6017b3e374edb1979980  src/locales/index.ts
-cc759164fa80c179162828f245d9dc9bcab75e04407f3cdaa4f111304e646b52  src/locales/zh-CN/_core/auth.json
+1db171cecda0f8d1c5e06347be01af467a9c0f37d8d41ccc6ca9d5d084f7c060  src/locales/zh-CN/_core/auth.json
 25e7f0ac6eeecc555759b6d8d33e2d4659ada6c7f1d9462d0a30bd8f0218562b  src/locales/zh-CN/_core/common.json
 bbbc4efc01d81d16f1940392d59f8c8465e3a9dae0871ed6e34cdf483c59a801  src/locales/zh-CN/_core/editor.json
 70bd7ab615a6629e74d294769636464a0565ad7c1ab0a65b16df37019cc4618c  src/locales/zh-CN/_core/routes.json

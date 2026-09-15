@@ -42,10 +42,12 @@ upstream_hash() {
 }
 
 # 对一个树生成排序 sha256 清单（路径 + 字节哈希，无任何归一化）。
+# 剪枝 node_modules/dist：不入库的构建产物，不参与快照清单与校验。
 hash_tree() {
   (
     cd "$1" || exit 1
-    find . -type f -print0 | sort -z | while IFS= read -r -d '' f; do
+    find . -type d \( -name node_modules -o -name dist \) -prune \
+      -o -type f -print0 | sort -z | while IFS= read -r -d '' f; do
       printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "${f#./}"
     done
   )
@@ -57,7 +59,9 @@ case "$MODE" in
       echo "ERROR: react source not found: $SRC (set REACT_FRONTEND_SRC)" >&2
       exit 1
     fi
-    rm -rf "$DST"
+    # 只清被跟踪的内容：node_modules/ 与 dist/ 不入库，原地保留（重装依赖太贵，
+    # 且 dev server 常以本目录为 cwd，顶层目录句柄被握住时删目录会直接失败）。
+    find "$DST" -mindepth 1 -maxdepth 1 ! -name node_modules ! -name dist -exec rm -rf {} + 2>/dev/null || true
     mkdir -p "$DST"
     list_src | sort -z | while IFS= read -r -d '' f; do
       mkdir -p "$DST/$(dirname "$f")"

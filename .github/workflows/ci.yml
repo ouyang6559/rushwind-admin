@@ -63,7 +63,7 @@ jobs:
       # enforce on the framework path-deps, which the framework repo's
       # own CI owns.
       - name: Format
-        run: cargo fmt -p gen-rust -p admin-diff -p admin-service -p middleware-auth -- --check
+        run: cargo fmt -p proto -p auth -p admin-api -p admin-diff -- --check
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings

@@ -1,0 +1,47 @@
+[package]
+name = "admin-api"
+description = "The admin service: a thin assembly binary over the admin-api library (config, state, service implementations, REST/SSE/task transports) over the shared db and proto crates."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+proto = { path = "../../crates/proto" }
+auth = { path = "../../crates/auth" }
+rushwind-authn = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-authn-jwt = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-http = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-transport-cron = { workspace = true }
+rushwind-apalis-postgres = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+apalis-core = { workspace = true }
+rushwind-transport = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-transport-axum = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-core = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "json"] }
+tokio = { workspace = true }
+sea-orm = { workspace = true }
+redis = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }
+bcrypt = { workspace = true }
+aes = { workspace = true }
+cbc = { workspace = true }
+sha2 = { workspace = true }
+sha1 = { workspace = true }
+hmac = { workspace = true }
+aes-gcm = { workspace = true }
+base64 = { workspace = true }
+pbjson-types = { workspace = true }
+rust-utils = { workspace = true }
+captcha = { workspace = true }
+futures-util = { workspace = true }
+qrcode = "0.14"
+hex = { workspace = true }
+async-trait = { workspace = true }

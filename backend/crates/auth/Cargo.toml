@@ -1,0 +1,15 @@
+[package]
+name = "auth"
+description = "The protected-subtree auth gate — the port of the reference pkg/middleware/auth: credential verification through the framework engine contract, failures rendered as the four-field status envelope with the admin error tables' UNAUTHORIZED pairing and the reference's exact message literals."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+async-trait = { workspace = true }
+proto = { path = "../proto" }
+rushwind-authn = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+axum = { version = "0.8", default-features = false }

@@ -1,0 +1,27 @@
+[package]
+name = "proto"
+description = "The admin API contract crate: the synced api/protos tree compiled to prost types with pbjson protojson serde, the protoc-produced annotated descriptor pool, and the rushwind-gen-http-generated route/binding/trait/mount surface (the deployment's Go AddWhiteList set rides here as AUTH_FREE). Wire semantics are pinned by docs/binding-spec.md."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+prost = { workspace = true }
+prost-reflect = { workspace = true }
+pbjson = { workspace = true }
+pbjson-types = { workspace = true }
+serde = { workspace = true }
+async-trait = { workspace = true }
+axum = { version = "0.8", default-features = false }
+rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+
+[build-dependencies]
+prost-build = { workspace = true }
+protox = { workspace = true }
+pbjson-build = { workspace = true }
+rushwind-gen-http = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }

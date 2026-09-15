@@ -117,11 +117,11 @@ This repository references its sibling repositories via relative paths, so clone
 
 ```shell
 cd backend
-cargo run -p admin-service   # binary admin-server, serving REST :7788
+cargo run -p admin-api   # binary admin-api, serving REST :7788
 ```
 
-- On startup it connects to PostgreSQL and Redis. Configuration lives in `backend/app/admin/service/configs/` (`auth.yaml` / `data.yaml` / `oss.yaml`)
-- `configs/jwt_public_key.pem` and the key embedded in `auth.yaml` are **demo keys** — replace them before any production deployment
+- On startup it connects to PostgreSQL and Redis. Configuration lives in `backend/services/admin-api/assets/` (`auth.yaml` / `data.yaml` / `oss.yaml`)
+- `assets/jwt_public_key.pem` and the key embedded in `auth.yaml` are **demo keys** — replace them before any production deployment
 - SSE (:7789) is not available yet
 
 ### Contract Sync
@@ -139,7 +139,7 @@ See the script header (`backend/api/sync-protos.sh`) for the default source path
 
 ```shell
 cd backend
-cargo fmt -p admin-api -p admin-diff -p admin-service -p middleware-auth -- --check
+cargo fmt -p proto -p auth -p admin-api -p admin-diff -- --check
 cargo clippy --workspace -- -D warnings
 cargo test --workspace
 ```
@@ -233,17 +233,14 @@ pnpm dev            # :5888, proxied to REST :7788
 ```text
 rushwind-admin/
 ├── backend/
-│   ├── api/                        # API contract (single source of truth)
-│   │   ├── protos/                 # proto contract copies (MANIFEST.sha256 gate)
-│   │   ├── third_party/            # third-party protos (google.api, etc.)
-│   │   ├── admin-api/              # contract crate: prost/pbjson types + descriptor pool + generated routes
-│   │   └── sync-protos.sh          # contract sync & verification script
-│   ├── app/admin/service/          # Admin service application
-│   │   ├── cmd/server/             # entrypoint (main.rs)
-│   │   ├── configs/                # config (auth / data / oss + JWT public key)
-│   │   └── internal/               # business core (server / service / data / ...)
-│   ├── pkg/                        # shared packages (middleware-auth auth gate, etc.)
-│   └── testbed/                    # differential test rig (compose + admin-diff sweep)
+│   ├── api/                        # API 契约（唯一契约源）
+│   │   ├── protos/                 # proto 契约副本（MANIFEST.sha256 校验门）
+│   │   ├── third_party/            # 第三方 proto（google.api 等）
+│   │   └── sync-protos.sh          # 契约同步与校验脚本
+│   ├── crates/                     # 共享 crate（proto 契约生成 crate、auth 鉴权门）
+│   ├── services/
+│   │   └── admin-api/              # Admin 服务 crate（src/ 模块树 + assets/ 内嵌资源）
+│   └── testbed/                    # 差分回归台架（compose + admin-diff sweep）
 ├── frontend/                       # React edition synced snapshot (sync-react.sh + dual manifests + RushWind brand overlay), other editions placeholder
 ├── docs/                           # project docs (binding-spec / development-plan / operator-matrix)
 └── .github/workflows/              # CI (fmt / clippy / test / contract sync gates)

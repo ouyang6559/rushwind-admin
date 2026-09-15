@@ -9,23 +9,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "admin-diff"
-version = "0.0.1"
-dependencies = [
- "gen-rust",
- "reqwest",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "admin-service"
+name = "admin-api"
 version = "0.0.1"
 dependencies = [
  "aes",
  "aes-gcm",
  "apalis-core",
  "async-trait",
+ "auth",
  "axum",
  "base64 0.22.1",
  "bcrypt",
@@ -33,11 +24,10 @@ dependencies = [
  "cbc",
  "chrono",
  "futures-util",
- "gen-rust",
  "hex",
  "hmac 0.12.1",
- "middleware-auth",
  "pbjson-types",
+ "proto",
  "qrcode",
  "rand 0.9.5",
  "redis",
@@ -59,6 +49,16 @@ dependencies = [
  "sha2 0.10.9",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "admin-diff"
+version = "0.0.1"
+dependencies = [
+ "proto",
+ "reqwest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -394,6 +394,17 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "auth"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "axum",
+ "proto",
+ "rushwind-authn",
+ "rushwind-http-binding",
+]
 
 [[package]]
 name = "autocfg"
@@ -1240,25 +1251,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gen-rust"
-version = "0.0.1"
-dependencies = [
- "async-trait",
- "axum",
- "pbjson",
- "pbjson-build",
- "pbjson-types",
- "prost",
- "prost-build",
- "prost-reflect",
- "protox",
- "rushwind-gen-http",
- "rushwind-http-binding",
- "serde",
- "tokio",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2024,17 +2016,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "middleware-auth"
-version = "0.0.1"
-dependencies = [
- "async-trait",
- "axum",
- "gen-rust",
- "rushwind-authn",
- "rushwind-http-binding",
-]
-
-[[package]]
 name = "miette"
 version = "7.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2523,6 +2504,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f94967dc7688f3054c7fac87473ffae4cc4c3904800e2d9f5b857246d8963b0a"
 dependencies = [
  "prost",
+]
+
+[[package]]
+name = "proto"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "axum",
+ "pbjson",
+ "pbjson-build",
+ "pbjson-types",
+ "prost",
+ "prost-build",
+ "prost-reflect",
+ "protox",
+ "rushwind-gen-http",
+ "rushwind-http-binding",
+ "serde",
+ "tokio",
 ]
 
 [[package]]

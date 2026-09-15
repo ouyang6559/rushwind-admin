@@ -117,11 +117,11 @@
 
 ```shell
 cd backend
-cargo run -p admin-service   # 二进制 admin-server，监听 REST :7788
+cargo run -p admin-api   # 二进制 admin-api，监听 REST :7788
 ```
 
-- 启动时连接 PostgreSQL 与 Redis，配置位于 `backend/app/admin/service/configs/`（`auth.yaml` / `data.yaml` / `oss.yaml`）
-- `configs/jwt_public_key.pem` 与 `auth.yaml` 内嵌密钥为**演示密钥**，生产部署必须更换
+- 启动时连接 PostgreSQL 与 Redis，配置位于 `backend/services/admin-api/assets/`（`auth.yaml` / `data.yaml` / `oss.yaml`）
+- `assets/jwt_public_key.pem` 与 `auth.yaml` 内嵌密钥为**演示密钥**，生产部署必须更换
 - SSE（:7789）尚未开放
 
 ### 契约同步
@@ -139,7 +139,7 @@ bash backend/api/sync-protos.sh --check  # 校验门（与 CI 一致）
 
 ```shell
 cd backend
-cargo fmt -p admin-api -p admin-diff -p admin-service -p middleware-auth -- --check
+cargo fmt -p proto -p auth -p admin-api -p admin-diff -- --check
 cargo clippy --workspace -- -D warnings
 cargo test --workspace
 ```
@@ -236,13 +236,10 @@ rushwind-admin/
 │   ├── api/                        # API 契约（唯一契约源）
 │   │   ├── protos/                 # proto 契约副本（MANIFEST.sha256 校验门）
 │   │   ├── third_party/            # 第三方 proto（google.api 等）
-│   │   ├── admin-api/              # 契约 crate：prost/pbjson 类型 + 描述符池 + 生成路由面
 │   │   └── sync-protos.sh          # 契约同步与校验脚本
-│   ├── app/admin/service/          # Admin 服务应用
-│   │   ├── cmd/server/             # 入口（main.rs）
-│   │   ├── configs/                # 配置（auth / data / oss + JWT 公钥）
-│   │   └── internal/               # 业务核心（server / service / data / ...）
-│   ├── pkg/                        # 公共包（middleware-auth 鉴权门等）
+│   ├── crates/                     # 共享 crate（proto 契约生成 crate、auth 鉴权门）
+│   ├── services/
+│   │   └── admin-api/              # Admin 服务 crate（src/ 模块树 + assets/ 内嵌资源）
 │   └── testbed/                    # 差分回归台架（compose + admin-diff sweep）
 ├── frontend/                       # React 版同步快照（sync-react.sh + 双清单门 + RushWind 品牌覆写），其余版本占位
 ├── docs/                           # 项目文档（binding-spec / development-plan / operator-matrix）

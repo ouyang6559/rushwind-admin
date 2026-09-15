@@ -109,9 +109,9 @@ fn concretize(path: &str) -> String {
 /// Builds the sweep from the generated route table.
 pub fn sweep() -> Vec<Case> {
     let mut cases = Vec::new();
-    for (idx, spec) in gen_rust::gen::routes::ROUTES.iter().enumerate() {
+    for (idx, spec) in proto::gen::routes::ROUTES.iter().enumerate() {
         let concrete = concretize(spec.path);
-        let gated = !gen_rust::AUTH_FREE
+        let gated = !proto::AUTH_FREE
             .iter()
             .any(|(s, m)| *s == spec.service_fq && *m == spec.method_name);
         let (class, kind) = if spec.shadowed {

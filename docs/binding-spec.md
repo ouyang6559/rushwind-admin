@@ -119,7 +119,7 @@ rushwind-transport-axum 使用 axum 0.8（`crates/rushwind-transport-axum/Cargo.
 
 三步均在 `ctx.Middleware`（鉴权链）**之前**执行；任何一步失败 → 直接上抛 → 400/CODEC 信封（`{"code":400,"reason":"CODEC","message":"…","metadata":{}}`）——即：**绑定/解码失败先于 401 到达**（差分 2026-09-14 两轮实证：80 条门控 body 路由的缺 CT 探针两侧同为 400，114 条门控非 body 路由两侧同为 401）。
 
-**Rust 侧实现**（`rushwind-http-binding::bindgate`，装配为**逐路由的最外层**，见 app/admin/service/internal/server/rest_server.rs 的 `wrap` 组合）：body（含 CT 查表）+ query 的绑定在层内完成，产出 DynamicMessage 经请求扩展传递给 handler。**唯一排序分歧**：路径变量绑定——axum 中间件拿不到路由捕获值，只能在鉴权层之后于 handler（框架 `rushwind-http-binding::glue` 生命周期尾）内执行；当「路径变量值畸形」且「令牌缺失/无效」同时发生时两侧分歧（参照 400 先行、复刻 401 先行；令牌有效时两侧同为 400）。豁免类 `path-bind-post-auth`。
+**Rust 侧实现**（`rushwind-http-binding::bindgate`，装配为**逐路由的最外层**，见 services/admin-api/src/server/rest_server.rs 的 `wrap` 组合）：body（含 CT 查表）+ query 的绑定在层内完成，产出 DynamicMessage 经请求扩展传递给 handler。**唯一排序分歧**：路径变量绑定——axum 中间件拿不到路由捕获值，只能在鉴权层之后于 handler（框架 `rushwind-http-binding::glue` 生命周期尾）内执行；当「路径变量值畸形」且「令牌缺失/无效」同时发生时两侧分歧（参照 400 先行、复刻 401 先行；令牌有效时两侧同为 400）。豁免类 `path-bind-post-auth`。
 
 ### 2.4 Rust 实现决策
 

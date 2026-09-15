@@ -117,11 +117,11 @@
 
 ```shell
 cd backend
-cargo run -p admin-service   # バイナリ admin-server、REST :7788 で待受
+cargo run -p admin-api   # バイナリ admin-api、REST :7788 で待受
 ```
 
-- 起動時に PostgreSQL と Redis に接続します。設定は `backend/app/admin/service/configs/`（`auth.yaml` / `data.yaml` / `oss.yaml`）
-- `configs/jwt_public_key.pem` と `auth.yaml` 埋め込み鍵は**デモ用鍵**です。本番導入時は必ず交換してください
+- 起動時に PostgreSQL と Redis に接続します。設定は `backend/services/admin-api/assets/`（`auth.yaml` / `data.yaml` / `oss.yaml`）
+- `assets/jwt_public_key.pem` と `auth.yaml` 埋め込み鍵は**デモ用鍵**です。本番導入時は必ず交換してください
 - SSE（:7789）は未対応
 
 ### 契約同期
@@ -139,7 +139,7 @@ bash backend/api/sync-protos.sh --check  # 検証ゲート（CI と同一）
 
 ```shell
 cd backend
-cargo fmt -p admin-api -p admin-diff -p admin-service -p middleware-auth -- --check
+cargo fmt -p proto -p auth -p admin-api -p admin-diff -- --check
 cargo clippy --workspace -- -D warnings
 cargo test --workspace
 ```
@@ -233,17 +233,14 @@ pnpm dev            # :5888、REST :7788 へプロキシ
 ```text
 rushwind-admin/
 ├── backend/
-│   ├── api/                        # API 契約（唯一の契約ソース）
-│   │   ├── protos/                 # proto 契約コピー（MANIFEST.sha256 検証ゲート）
-│   │   ├── third_party/            # サードパーティ proto（google.api など）
-│   │   ├── admin-api/              # 契約 crate：prost/pbjson 型 + ディスクリプタプール + 生成ルート
-│   │   └── sync-protos.sh          # 契約同期・検証スクリプト
-│   ├── app/admin/service/          # Admin サービスアプリケーション
-│   │   ├── cmd/server/             # エントリポイント（main.rs）
-│   │   ├── configs/                # 設定（auth / data / oss + JWT 公開鍵）
-│   │   └── internal/               # ビジネスコア（server / service / data / ...）
-│   ├── pkg/                        # 共有パッケージ（middleware-auth 認証ゲートなど）
-│   └── testbed/                    # 差分回帰テスト台（compose + admin-diff sweep）
+│   ├── api/                        # API 契约（唯一契约源）
+│   │   ├── protos/                 # proto 契约副本（MANIFEST.sha256 校验门）
+│   │   ├── third_party/            # 第三方 proto（google.api 等）
+│   │   └── sync-protos.sh          # 契约同步与校验脚本
+│   ├── crates/                     # 共享 crate（proto 契约生成 crate、auth 鉴权门）
+│   ├── services/
+│   │   └── admin-api/              # Admin 服务 crate（src/ 模块树 + assets/ 内嵌资源）
+│   └── testbed/                    # 差分回归台架（compose + admin-diff sweep）
 ├── frontend/                       # React版 同期スナップショット（sync-react.sh + 双マニフェストゲート + RushWind ブランドオーバーレイ）、他版はプレースホルダ
 ├── docs/                           # プロジェクトドキュメント（binding-spec / development-plan / operator-matrix）
 └── .github/workflows/              # CI（fmt / clippy / test / 契約同期ゲート）

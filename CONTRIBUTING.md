@@ -61,7 +61,7 @@ bash backend/api/sync-protos.sh --check  # 校验门（与 CI 一致）
 
   ```bash
   cd backend
-  cargo fmt -p admin-api -p admin-diff -p admin-service -p middleware-auth -- --check
+  cargo fmt -p proto -p auth -p admin-api -p admin-diff -- --check
   cargo clippy --workspace -- -D warnings
   cargo test --workspace
   ```

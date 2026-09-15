@@ -55,7 +55,21 @@ pub async fn verify(redis: &ConnectionManager, id: &str, value: &str) -> bool {
     }
 }
 
-/// Renders the challenge as a 240x80 PNG and returns `(base64 png, answer)`.
+/// Cropper-safe glyph-run envelope, in pixels across. The renderer packs
+/// its six glyphs into a run and centers the crop window on that run; the
+/// window is 240 px wide on a 400 px canvas, so a run wider than the
+/// envelope would shear its first and last glyphs into the window's edge,
+/// and a run narrower than the envelope floor would starve the centering
+/// subtraction. Measured over the font's repertoire, a six-glyph run
+/// lands anywhere in 120–324 px; inside the envelope the window provably
+/// stays within the canvas with blank margin to spare on every side.
+/// Outside draws are simply redrawn — the current font needs that for
+/// 6.6% of draws, and the 32-draw budget exhausts with probability on the
+/// order of 0.066³².
+const RUN_MIN_PX: u32 = 96;
+const RUN_MAX_PX: u32 = 232;
+
+/// Renders the challenge as a 240x96 PNG and returns `(base64 png, answer)`.
 ///
 /// Pipeline: six glyphs laid side by side, one horizontal sine wave so the
 /// run undulates, a crop that keeps the text centered, and finally a random
@@ -64,27 +78,33 @@ pub async fn verify(redis: &ConnectionManager, id: &str, value: &str) -> bool {
 ///
 /// The glyph pool is [`CAPTCHA_SOURCE`] intersected with the renderer
 /// font's repertoire: the font cannot draw a few source glyphs (`L`), and
-/// an unfiltered pick silently drops them — shortening some answers below
-/// six characters, and in the extreme (nearly all picks dropped) starving
-/// the cropper's centering math. With only drawable glyphs in the pool,
-/// every pick renders and the six-glyph run measures 142–265 px across,
-/// which pins the crop window provably inside the renderer's canvas
-/// (left ≥ 51, right ≤ 352, top 109, bottom 189).
+/// an unfiltered pick silently drops them, shortening some answers below
+/// six characters.
 fn render_png_base64() -> Result<(String, String), String> {
-    let mut cap = captcha::Captcha::new();
-    let supported = cap.supported_chars();
-    let glyphs: Vec<char> = CAPTCHA_SOURCE
-        .chars()
-        .filter(|c| supported.contains(c))
-        .collect();
+    let glyphs: Vec<char> = {
+        let probe = captcha::Captcha::new();
+        let supported = probe.supported_chars();
+        CAPTCHA_SOURCE
+            .chars()
+            .filter(|c| supported.contains(c))
+            .collect()
+    };
     if glyphs.len() < 6 {
         return Err("captcha font repertoire covers too few glyphs".to_string());
     }
-    cap.set_chars(&glyphs);
-    cap.add_chars(6);
+    let mut cap = (0..32)
+        .find_map(|_| {
+            let mut attempt = captcha::Captcha::new();
+            attempt.set_chars(&glyphs);
+            attempt.add_chars(6);
+            let g = attempt.text_area();
+            let run = g.right - g.left + 1;
+            (RUN_MIN_PX..=RUN_MAX_PX).contains(&run).then_some(attempt)
+        })
+        .ok_or_else(|| "captcha layout retry budget exhausted".to_string())?;
     let answer = cap.chars_as_string();
     cap.apply_filter(captcha::filters::Wave::new(2.0, 12.0).horizontal());
-    cap.view(240, 80);
+    cap.view(240, 96);
     let hue = CAPTCHA_HUES[rand::rng().random_range(0..CAPTCHA_HUES.len())];
     cap.set_color(hue);
     let b64 = cap

@@ -75,3 +75,45 @@ pub fn char_classes(password: &str) -> u32 {
     }
     classes
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ip_exact_match_and_mismatch() {
+        assert!(ip_matches("10.0.0.1", "10.0.0.1"));
+        assert!(!ip_matches("10.0.0.1", "10.0.0.2"));
+        assert!(!ip_matches("", "10.0.0.1"));
+        assert!(!ip_matches("not-an-ip", "10.0.0.1"));
+    }
+
+    #[test]
+    fn ip_cidr_membership() {
+        assert!(ip_matches("192.168.4.5", "192.168.4.0/24"));
+        assert!(!ip_matches("192.168.5.5", "192.168.4.0/24"));
+        assert!(!ip_matches("192.168.4.5", "192.168.4.0/33"));
+        assert!(!ip_matches("192.168.4.5", "not-an-ip/24"));
+    }
+
+    #[test]
+    fn ip_zero_mask_is_wildcard() {
+        assert!(ip_matches("1.2.3.4", "0.0.0.0/0"));
+    }
+
+    #[test]
+    fn time_window_rejects_malformed() {
+        assert!(!time_window_matches("nodash"));
+        assert!(!time_window_matches("9:00-not-a-time"));
+        assert!(!time_window_matches("bad:00-10:00"));
+    }
+
+    #[test]
+    fn char_class_counting() {
+        assert_eq!(char_classes("abcdef"), 1);
+        assert_eq!(char_classes("aBc"), 2);
+        assert_eq!(char_classes("aB1"), 3);
+        assert_eq!(char_classes("aB1!"), 4);
+        assert_eq!(char_classes(""), 0);
+    }
+}

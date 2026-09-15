@@ -444,3 +444,50 @@ impl TokenStore {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::UserTokenPayload;
+    use serde_json::{json, Map, Value};
+
+    fn base_claims() -> Map<String, Value> {
+        json!({"sub": "u", "uid": "7", "tid": "3", "jti": "j1"})
+            .as_object()
+            .unwrap()
+            .clone()
+    }
+
+    #[test]
+    fn parses_required_claims() {
+        let p = UserTokenPayload::from_claims(&base_claims()).unwrap();
+        assert_eq!(p.username, "u");
+        assert_eq!(p.user_id, 7);
+        assert_eq!(p.tenant_id, 3);
+    }
+
+    #[test]
+    fn numeric_uid_string_uid_both_parse() {
+        let mut c = base_claims();
+        c.insert("uid".into(), json!(9));
+        assert_eq!(UserTokenPayload::from_claims(&c).unwrap().user_id, 9);
+        c.insert("uid".into(), json!("11"));
+        assert_eq!(UserTokenPayload::from_claims(&c).unwrap().user_id, 11);
+    }
+
+    #[test]
+    fn missing_sub_or_uid_rejects() {
+        let mut c = base_claims();
+        c.remove("sub");
+        assert!(UserTokenPayload::from_claims(&c).is_none());
+        let mut c = base_claims();
+        c.remove("uid");
+        assert!(UserTokenPayload::from_claims(&c).is_none());
+    }
+
+    #[test]
+    fn missing_tid_defaults_to_platform() {
+        let mut c = base_claims();
+        c.remove("tid");
+        assert_eq!(UserTokenPayload::from_claims(&c).unwrap().tenant_id, 0);
+    }
+}

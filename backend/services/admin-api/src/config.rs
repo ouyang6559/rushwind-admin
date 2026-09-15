@@ -314,3 +314,23 @@ impl Config {
 fn non_empty(v: String) -> Option<String> {
     (!v.is_empty()).then_some(v)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse_go_duration;
+
+    #[test]
+    fn parses_plain_units() {
+        assert_eq!(parse_go_duration("300s"), Some(300.0));
+        assert_eq!(parse_go_duration("90m"), Some(5400.0));
+        assert_eq!(parse_go_duration("1.5h"), Some(5400.0));
+        assert_eq!(parse_go_duration("0.4s"), Some(0.4));
+    }
+
+    #[test]
+    fn rejects_malformed() {
+        assert_eq!(parse_go_duration(""), None);
+        assert_eq!(parse_go_duration("abc"), None);
+        assert_eq!(parse_go_duration("12q"), None);
+    }
+}

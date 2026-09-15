@@ -11,10 +11,10 @@ const LOGIN_LOCKOUT_SECS: i64 = 15 * 60;
 fn fail_keys(ip: &str, username: &str) -> Vec<String> {
     let mut keys = Vec::with_capacity(2);
     if !ip.is_empty() {
-        keys.push(format!("gowind:login:fail:ip:{ip}"));
+        keys.push(format!("admin:login:fail:ip:{ip}"));
     }
     if !username.is_empty() {
-        keys.push(format!("gowind:login:fail:user:{username}"));
+        keys.push(format!("admin:login:fail:user:{username}"));
     }
     keys
 }

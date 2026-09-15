@@ -146,3 +146,18 @@ pub fn ts_to_naive(value: &pbjson_types::Timestamp) -> Option<chrono::NaiveDateT
             .naive_utc(),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{naive_to_ts, ts_to_naive};
+
+    #[test]
+    fn timestamp_roundtrip_is_identity() {
+        let naive = chrono::NaiveDate::from_ymd_opt(2024, 3, 1)
+            .unwrap()
+            .and_hms_opt(12, 30, 0)
+            .unwrap();
+        let ts = naive_to_ts(naive).unwrap();
+        assert_eq!(ts_to_naive(&ts).unwrap(), naive);
+    }
+}

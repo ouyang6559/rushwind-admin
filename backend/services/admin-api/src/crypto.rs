@@ -13,9 +13,9 @@ type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 pub const DEFAULT_AES_KEY: &[u8; 16] = b"f51d66a73d8a0927";
 
 /// The AES-256-GCM key for `enc:` secrets (MFA factors): derived from
-/// env `GOWIND_CRYPTO_KEY`; unset ⇒ factors are stored in plaintext.
+/// env `RUSHWIND_CRYPTO_KEY`; unset ⇒ factors are stored in plaintext.
 pub fn crypto_key() -> Option<[u8; 32]> {
-    let raw = std::env::var("GOWIND_CRYPTO_KEY").ok()?;
+    let raw = std::env::var("RUSHWIND_CRYPTO_KEY").ok()?;
     let mut key = [0u8; 32];
     let bytes = raw.as_bytes();
     key[..bytes.len().min(32)].copy_from_slice(&bytes[..bytes.len().min(32)]);
@@ -99,7 +99,7 @@ pub fn decrypt_if_needed(stored: &str) -> Result<String, String> {
     let Some(stripped) = stored.strip_prefix("enc:") else {
         return Ok(stored.to_string());
     };
-    let key = crypto_key().ok_or("GOWIND_CRYPTO_KEY unset but secret is encrypted")?;
+    let key = crypto_key().ok_or("RUSHWIND_CRYPTO_KEY unset but secret is encrypted")?;
     use base64::Engine as _;
     let packed = base64::engine::general_purpose::STANDARD
         .decode(stripped)
@@ -188,4 +188,51 @@ pub fn base32_encode(data: &[u8]) -> String {
         out.push(ALPHABET[(acc << (5 - bits)) as usize & 31] as char);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        decrypt_aes_cbc, hash_password, sha256_hex, verify_password, DEFAULT_AES_KEY,
+        DUMMY_PASSWORD_HASH,
+    };
+
+    #[test]
+    fn bcrypt_hash_and_verify_roundtrip() {
+        let h = hash_password("s3cret!x").unwrap();
+        assert!(verify_password("s3cret!x", &h));
+        assert!(!verify_password("wrong", &h));
+    }
+
+    #[test]
+    fn dummy_hash_never_verifies_the_canary() {
+        assert!(!verify_password(
+            "definitely-not-the-password",
+            DUMMY_PASSWORD_HASH
+        ));
+    }
+
+    #[test]
+    fn sha256_known_vector() {
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn aes_cbc_roundtrip_through_default_key() {
+        use aes::cipher::{block_padding::Pkcs7, BlockEncryptMut, KeyIvInit};
+        type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
+        let plaintext = b"login-credential-payload";
+        let mut buf = [0u8; 48];
+        let ciphertext = Aes128CbcEnc::new(DEFAULT_AES_KEY.into(), DEFAULT_AES_KEY.into())
+            .encrypt_padded_b2b_mut::<Pkcs7>(plaintext, &mut buf)
+            .unwrap()
+            .to_vec();
+        assert_eq!(
+            decrypt_aes_cbc(&ciphertext).unwrap(),
+            "login-credential-payload"
+        );
+    }
 }

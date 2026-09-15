@@ -1,6 +1,6 @@
 //! Captcha — 6-char alphanumeric challenges rendered as PNG:
 //! 6 chars from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, 10-minute TTL,
-//! Redis key `gowind:captcha:{id}`, verify-and-delete on match.
+//! Redis key `admin:captcha:{id}`, verify-and-delete on match.
 
 use rand::Rng;
 use redis::aio::ConnectionManager;
@@ -10,7 +10,7 @@ pub const CAPTCHA_SOURCE: &str = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 pub const CAPTCHA_TTL_SECS: u64 = 600;
 
 fn captcha_key(id: &str) -> String {
-    format!("gowind:captcha:{id}")
+    format!("admin:captcha:{id}")
 }
 
 /// Generates a captcha: returns (id, base64 png data-url, answer).

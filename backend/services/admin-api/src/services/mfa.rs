@@ -188,7 +188,7 @@ impl MfaServiceHandlers for MfaService {
         let secret_bytes = rand::random::<[u8; 20]>();
         let secret = crate::crypto::base32_encode(&secret_bytes);
         let account = format!("uid:{uid}");
-        let otp_auth_url = format!("otpauth://totp/GoWindAdmin:{account}?secret={secret}&issuer=GoWindAdmin&algorithm=SHA1&digits=6&period=30");
+        let otp_auth_url = format!("otpauth://totp/RushWindAdmin:{account}?secret={secret}&issuer=RushWindAdmin&algorithm=SHA1&digits=6&period=30");
         // QR as a PNG data URI.
         // SVG rendering needs no native image stack; the data URI rides
         // the same wire field fills with a PNG.

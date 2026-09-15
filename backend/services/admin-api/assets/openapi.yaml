@@ -3,8 +3,8 @@
 
 openapi: 3.0.3
 info:
-    title: GoWind Admin API
-    description: GoWind Admin API
+    title: RushWind Admin API
+    description: RushWind Admin API
     contact:
         name: tx7do
         url: https://github.com/tx7do/go-wind-admin

@@ -524,7 +524,7 @@ impl AuthenticationServiceHandlers for AuthenticationService {
                 let mut conn = self.state.redis.clone();
                 let _: Result<(), _> = redis::AsyncCommands::set_ex(
                     &mut conn,
-                    format!("gowind:vcode:reset_password:{identifier}"),
+                    format!("admin:vcode:reset_password:{identifier}"),
                     code.clone(),
                     600u64,
                 )
@@ -548,7 +548,7 @@ impl AuthenticationServiceHandlers for AuthenticationService {
         if identifier.is_empty() || code.is_empty() {
             return Err(status_error("BAD_REQUEST", "invalid identifier or code"));
         }
-        let key = format!("gowind:vcode:reset_password:{identifier}");
+        let key = format!("admin:vcode:reset_password:{identifier}");
         let mut conn = self.state.redis.clone();
         let stored: Option<String> = redis::AsyncCommands::get(&mut conn, &key)
             .await

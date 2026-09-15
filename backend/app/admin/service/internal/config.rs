@@ -11,6 +11,7 @@ pub struct Config {
     /// The REST listener address (`server.rest.addr`, ":7788" form).
     pub rest_addr: String,
     pub rest_timeout_secs: u64,
+    pub enable_swagger: bool,
     pub cors_allow_credentials: bool,
     pub cors_headers: Vec<String>,
     pub cors_methods: Vec<String>,
@@ -121,6 +122,8 @@ struct RestSection {
     #[serde(default)]
     timeout: String,
     #[serde(default)]
+    enable_swagger: bool,
+    #[serde(default)]
     cors: Option<CorsSection>,
 }
 
@@ -221,6 +224,7 @@ impl Config {
         let rest_section = server_section.rest.unwrap_or(RestSection {
             addr: ":7788".into(),
             timeout: String::new(),
+            enable_swagger: false,
             cors: None,
         });
         let sse_section = server_section.sse.unwrap_or(SseSection {
@@ -276,6 +280,7 @@ impl Config {
             rest_timeout_secs: parse_go_duration(&rest_section.timeout)
                 .map(|s| s as u64)
                 .unwrap_or(10),
+            enable_swagger: rest_section.enable_swagger,
             cors_allow_credentials: rest_section
                 .cors
                 .as_ref()

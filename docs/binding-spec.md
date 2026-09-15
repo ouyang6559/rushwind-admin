@@ -182,7 +182,26 @@ rushwind-transport-axum 使用 axum 0.8（`crates/rushwind-transport-axum/Cargo.
 
 Rust 侧：`rushwind-http::cors_compat`（1:1 移植，含 `canonical_header_key` 端口与 `Set` 的头覆盖语义），装配走 `HttpEdge::with_cors_compat`（rest_server.rs）。差分 `cors-preflight` 两例（允许/拒绝 origin）2026-09-14 对位通过。
 
-## 7. 差分测试基线（本文档的验收面）
+## 7. SSE 通道（:7789，kratos-transport/transport/sse@v1.3.8 + bootstrap/transport/sse@v0.0.4）
+
+SSE 是独立 transport server（`sse_server.go` → `sse.NewSseServer(cfg.Server.Sse, WithSubscriber/WithAuthorize)`），与 §6 的 gorilla CORS **完全无关**——其 CORS 行为是该包 `http.go` 内的静态硬编码（`corsAllowOrigin` 默认 `*`，bootstrap 包装层从不调用 `WithCORSAllowOrigin`）。线上行为全集（源码推导，2026-09-15 Rust 侧对位实现并四路探针验证）：
+
+| 场景 | 线上行为（transport sse/http.go 实录） |
+|---|---|
+| `OPTIONS /events`（任意头，鉴权之前） | 204 No Content + 固定四头：`Access-Control-Allow-Origin: *`、`Access-Control-Allow-Methods: GET, OPTIONS`、`Access-Control-Allow-Headers: Content-Type, Authorization, X-Token, Last-Event-ID`、`Access-Control-Max-Age: 86400` |
+| 鉴权失败（缺 token / 签名过期 / 白名单吊销 / 黑名单 / stream 缺失·非数字·≠uid） | **一律 401**（`isForbidden` 对生成错误永假：包内 sentinel 是 stdlib error，`kratos Error.Is` 的 `errors.As` 反向不命中）+ `http.Error` 形态：`Content-Type: text/plain; charset=utf-8` + `X-Content-Type-Options: nosniff` + body 为 go-error 文本行 `error: code = {表值} reason = {reason} message = {msg} metadata = map[] cause = <nil>` + 换行（表值：UNAUTHORIZED→401、FORBIDDEN→403——即黑名单与 stream 失配的 body 带 `code = 403` 而状态行仍是 401）；**无任何 CORS 头**（SSE 头段尚未执行） |
+| 鉴权通过 + `?stream=`=uid | `prepareHeaderForSSE`：`Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive`、`Access-Control-Allow-Origin: *`、`Access-Control-Allow-Headers: Content-Type`，随后 200 + 事件流（`transfer-encoding: chunked` 为两端涌现的流式框架） |
+| 事件帧 | 固定顺序 `id:`（GUIDv4）→ `data:`（recipient protojson）→ `event: notification`，空行终止；无 retry 字段、无 keep-alive ping（空转静默） |
+| 订阅语义 | stream = userId：一用户多设备共享一条流，仅收本人 recipient 事件；`auto_stream: true` 下流随订阅自动建 |
+
+Rust 侧：`services/admin-api/src/server/sse.rs`——`events_preflight`（OPTIONS 静态应答）+ `sse_error`（401 纯文本形态，code 字段取 `error_status` 表值）+ 流响应头三枚插入（ACAO/ACAH/Connection 叠加在 axum `Sse` 自带的 content-type/cache-control 之上）+ `Event` builder 调用序 id→data→event（axum 按调用序拼帧，与上述顺序对位）+ Hub 广播按 uid 过滤（等价 per-stream 订阅）。路由路径接 `server.sse.path`（缺省回退 `/`）。2026-09-15 四路探针（预检 / 无 token / 成功路径头集 / stream 失配体）逐字节对位通过。
+
+已知分歧（差分台架未覆盖 SSE——:7789 不在 sweep 语料，本节为源码推导 + 探针验证的契约记录）：
+- **方法面**：参照 mux 对全部方法走同一 handler（POST 也能开流）；axum 侧 GET（含 HEAD）+ OPTIONS 之外返 405（无 CORS 头）——前端只用 GET，不可达。
+- **未配置 path 的回退**：参照 `/` 是 mux 前缀 catch-all；axum 侧为精确 `/`——嵌入配置恒为 `/events`，不可达。
+- 头名小写（hyper 恒小写 vs Go canonical MIME 大小写）与 chunked/CL 框架差异为全 API 平台涌现属性，非 SSE 独有。
+
+## 8. 差分测试基线（本文档的验收面）
 
 | 类别 | 断言 |
 |---|---|

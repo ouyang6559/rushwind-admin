@@ -1,23 +1,46 @@
-//! The SSE notification server — //! `internal/server/module` + `InternalMessageService.HandleAuthorize`.
+//! The SSE notification server: the `/events` transport handler plus
+//! the in-process notification hub.
 //!
-//! * token from `Authorization: Bearer`, `X-Token`, or `?token=`
-//!   (kratos-transport sse/module:18-31);
+//! Wire behavior (transport sse/http.go + module:18-31, service
+//! HandleAuthorize:120-163):
+//! * `OPTIONS` preflight — 204 with a fixed CORS header set (origin
+//!   `*`, methods `GET, OPTIONS`, headers `Content-Type, Authorization,
+//!   X-Token, Last-Event-ID`, max-age `86400`), answered before any
+//!   authorization check;
+//! * every authorize failure — 401 with the plain-text error line
+//!   (`error: code = … reason = … message = … metadata = … cause = …`,
+//!   `text/plain; charset=utf-8`, `X-Content-Type-Options: nosniff`)
+//!   and no CORS headers. The status is Unauthorized for every failure
+//!   class: the transport's forbidden-sentinel check (`errors.Is`
+//!   against a stdlib sentinel) never fires on the generated status
+//!   errors, so the blocked-token and stream-mismatch bodies carry
+//!   `code = 403` under a 401 status line;
+//! * token from `Authorization: Bearer`, `X-Token`, or `?token=`;
 //! * access-token validation rides the same gate primitives: signature +
 //!   expiry via the engine, Redis whitelist/blacklist via the store;
 //! * `?stream=` must equal the token's userId (anti cross-user
-//!   subscription, service:146-158);
-//! * events: `notification`, id = GUIDv4, data = the recipient protojson;
-//!   stream id = userId — all of a user's devices share one stream.
+//!   subscription);
+//! * the live stream carries `text/event-stream`, `no-cache`,
+//!   `Connection: keep-alive`, and the transport-level CORS pair
+//!   (`Access-Control-Allow-Origin: *`,
+//!   `Access-Control-Allow-Headers: Content-Type`) — added on top of
+//!   the two headers the SSE body already sets. The stream is silent
+//!   when idle (no keep-alive pings);
+//! * events: `notification`, id = GUIDv4, data = the recipient
+//!   protojson, framed `id:`/`data:`/`event:` in that order — each
+//!   connection forwards only its own userId's payloads; all of a
+//!   user's devices share one stream.
 
 use std::convert::Infallible;
 use std::sync::Arc;
 
 use axum::extract::{Query, State};
-use axum::http::{header, HeaderMap};
-use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+use axum::response::sse::{Event, Sse};
+use axum::response::{IntoResponse, Response};
 use tokio::sync::broadcast;
 
-use crate::state::{status_error, AppState};
+use crate::state::{status_error, AppState, StatusError};
 use crate::token::UserTokenPayload;
 
 /// The in-process notification hub: senders publish (userId, json);
@@ -66,90 +89,108 @@ fn extract_token(headers: &HeaderMap, query_token: Option<&String>) -> Option<St
     query_token.filter(|t| !t.is_empty()).cloned()
 }
 
+/// The OPTIONS preflight answer: a fixed CORS header set with no
+/// authorization gate — the transport answers before the authorize
+/// check.
+async fn events_preflight() -> Response {
+    (
+        StatusCode::NO_CONTENT,
+        [
+            (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
+            (header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS"),
+            (
+                header::ACCESS_CONTROL_ALLOW_HEADERS,
+                "Content-Type, Authorization, X-Token, Last-Event-ID",
+            ),
+            (header::ACCESS_CONTROL_MAX_AGE, "86400"),
+        ],
+    )
+        .into_response()
+}
+
+/// The authorize-failure shape: an Unauthorized status with the
+/// plain-text error line and the nosniff marker, no CORS headers (the
+/// transport's SSE header pass has not run at that point). The body's
+/// `code` carries the status-table value for the reason — 403 for the
+/// forbidden-reason bodies — while the status line stays 401.
+fn sse_error(err: StatusError) -> Response {
+    let code = err.status;
+    let reason = err.reason;
+    let message = &err.message;
+    (
+        StatusCode::UNAUTHORIZED,
+        [
+            (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+        ],
+        format!(
+            "error: code = {code} reason = {reason} message = {message} metadata = map[] cause = <nil>\n"
+        ),
+    )
+        .into_response()
+}
+
 /// GET /events — authorize, then hold the SSE stream open, forwarding
 /// this user's notifications.
-#[allow(clippy::result_large_err)]
 pub async fn events(
     State(state): State<Arc<AppState>>,
     Query(params): Query<std::collections::HashMap<String, String>>,
     headers: HeaderMap,
-) -> Result<
-    Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>>,
-    axum::response::Response,
-> {
-    let token = extract_token(&headers, params.get("token")).ok_or_else(|| {
-        rushwind_http_binding::envelope::error_response(status_error(
-            "UNAUTHORIZED",
-            "invalid token",
-        ))
-    })?;
+) -> Response {
+    let Some(token) = extract_token(&headers, params.get("token")) else {
+        return sse_error(status_error("UNAUTHORIZED", "invalid token"));
+    };
 
     // Signature + expiry via the engine, whitelist + blacklist via the
     // store — the HandleAuthorize ValidateTokenRequest(ACCESS) sequence.
-    let claims = state
-        .authenticator
-        .authenticate_token(&token)
-        .map_err(|_| {
-            rushwind_http_binding::envelope::error_response(status_error(
-                "UNAUTHORIZED",
-                "invalid token",
-            ))
-        })?;
-    let uid = claims
+    let Ok(claims) = state.authenticator.authenticate_token(&token) else {
+        return sse_error(status_error("UNAUTHORIZED", "invalid token"));
+    };
+    let Some(uid) = claims
         .0
         .get("uid")
         .and_then(|v| v.as_u64())
         .map(|v| v as u32)
-        .ok_or_else(|| {
-            rushwind_http_binding::envelope::error_response(status_error(
-                "UNAUTHORIZED",
-                "invalid token",
-            ))
-        })?;
-    let jti = claims.get_jwt_id().map_err(|_| {
-        rushwind_http_binding::envelope::error_response(status_error(
-            "UNAUTHORIZED",
-            "invalid token",
-        ))
-    })?;
+    else {
+        return sse_error(status_error("UNAUTHORIZED", "invalid token"));
+    };
+    let Ok(jti) = claims.get_jwt_id() else {
+        return sse_error(status_error("UNAUTHORIZED", "invalid token"));
+    };
     if !state.tokens.is_valid_access_token(uid, &jti, &token).await {
-        return Err(rushwind_http_binding::envelope::error_response(
-            status_error("UNAUTHORIZED", "access token is revoked or expired"),
+        return sse_error(status_error(
+            "UNAUTHORIZED",
+            "access token is revoked or expired",
         ));
     }
     if state.tokens.is_blocked_access_token(&jti).await {
-        return Err(rushwind_http_binding::envelope::error_response(
-            status_error("FORBIDDEN", "token is blocked"),
-        ));
+        return sse_error(status_error("FORBIDDEN", "token is blocked"));
     }
 
     // The stream must be the token's own userId.
-    let stream_uid: u32 = params
+    if !params
         .get("stream")
-        .and_then(|s| s.parse().ok())
-        .filter(|s| *s == uid)
-        .ok_or_else(|| {
-            rushwind_http_binding::envelope::error_response(status_error(
-                "FORBIDDEN",
-                "stream user mismatch",
-            ))
-        })?;
-    let _ = stream_uid;
+        .and_then(|s| s.parse::<u32>().ok())
+        .is_some_and(|s| s == uid)
+    {
+        return sse_error(status_error("FORBIDDEN", "stream user mismatch"));
+    }
 
     let rx = state.hub.subscribe();
-    let stream = futures_util::stream::unfold(rx, |mut rx| async move {
+    let stream = futures_util::stream::unfold((rx, uid), |(mut rx, uid)| async move {
         loop {
             match rx.recv().await {
                 Ok((user_id, payload)) => {
-                    if payload.is_empty() {
+                    // Only this connection's own userId's payloads are
+                    // forwarded — the per-stream subscription filter.
+                    if user_id != uid || payload.is_empty() {
                         continue;
                     }
                     let event = Event::default()
                         .id(uuid::Uuid::new_v4().to_string())
-                        .event("notification")
-                        .data(payload);
-                    let _ = user_id;
-                    return Some((Ok::<_, Infallible>(event), rx));
+                        .data(payload)
+                        .event("notification");
+                    return Some((Ok::<_, Infallible>(event), (rx, uid)));
                 }
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(broadcast::error::RecvError::Closed) => return None,
@@ -157,11 +198,20 @@ pub async fn events(
         }
     });
 
-    Ok(Sse::new(stream).keep_alive(
-        KeepAlive::new()
-            .interval(std::time::Duration::from_secs(15))
-            .text("ping"),
-    ))
+    let mut response = Sse::new(stream).into_response();
+    // The transport's SSE header pass: CORS pair + keep-alive on top of
+    // the content-type/cache-control the SSE body already carries.
+    let headers = response.headers_mut();
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_HEADERS,
+        HeaderValue::from_static("Content-Type"),
+    );
+    headers.insert(header::CONNECTION, HeaderValue::from_static("keep-alive"));
+    response
 }
 
 /// Publishes a notification for one recipient — called by SendMessage
@@ -195,13 +245,26 @@ pub fn publish_recipient(hub: &Hub, payload: &NotificationPayload) {
 #[allow(dead_code)]
 fn _claims_shape(_: &UserTokenPayload) {}
 
-/// Assembles the `/events` router into a transport server
-/// bound to `server.sse.addr` (default :7789), registered into the same
-/// lifecycle as REST.
+/// Assembles the `/events` router into a transport server bound to
+/// `server.sse.addr` (default :7789), registered into the same
+/// lifecycle as REST. The route path rides `server.sse.path` when set,
+/// falling back to `/` (exact match only — the reference mux's `/`
+/// default is a catch-all prefix; unreachable while the embedded
+/// config pins `/events`).
 pub fn new_sse_server(
     state: std::sync::Arc<crate::state::AppState>,
     addr: std::net::SocketAddr,
 ) -> Result<rushwind_transport_axum::AxumServer, String> {
-    let router = axum::Router::new().route("/events", axum::routing::get(events).with_state(state));
+    let path = if state.cfg.sse_path.is_empty() {
+        "/".to_string()
+    } else {
+        state.cfg.sse_path.clone()
+    };
+    let router = axum::Router::new().route(
+        path.as_str(),
+        axum::routing::get(events)
+            .options(events_preflight)
+            .with_state(state),
+    );
     rushwind_transport_axum::AxumServer::new(addr, router).map_err(|e| format!("sse server: {e}"))
 }

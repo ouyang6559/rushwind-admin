@@ -24,7 +24,7 @@ pub struct Config {
     pub cors_methods: Vec<String>,
     pub cors_origins: Vec<String>,
     pub sse_addr: String,
-    #[allow(dead_code)] // the events path lands with the SSE handler query surface
+    /// The SSE events route path (`server.sse.path`).
     pub sse_path: String,
     pub database_source: String,
     /// Startup gate: run pending schema migrations before seeding.

@@ -173,126 +173,108 @@ impl Server for ApalisServer {
 }
 
 // ---------------------------------------------------------------------------
-// The cron producer — the asynq scheduler's job: every minute, enabled
-// PERIODIC rows whose cron spec matches are enqueued (deduped by type
-// name across tenants), plus the two system crons from
-// task_service.go:357-379 (hourly tenant expiry scan, 03:30 audit
-// archive) that register on every RestartAllTask/start.
+// The cron producer — the asynq scheduler's job: static system crons are
+// registered directly; the DB-driven PERIODIC rows ride a wildcard job
+// whose handler scans `sys_tasks` each minute, matches specs, dedupes by
+// type name across tenants, and enqueues.
 // ---------------------------------------------------------------------------
 
-/// The cron producer loop: aligned to the minute.
-pub async fn run_cron_producer(state: Arc<AppState>, tasks: Arc<ApalisServer>) {
-    let mut ticker = tokio::time::interval(std::time::Duration::from_secs(30));
-    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    loop {
-        ticker.tick().await;
-        use chrono::Timelike as _;
-        let now = crate::data::now();
-        if now.second() != 0 {
-            continue; // aligned to the minute
-        }
-        // System crons (task_service.go:357-379).
-        if now.minute() == 0 {
-            let _ = tasks.enqueue("tenant_expiry_scan", serde_json::json!({})).await;
-        }
-        if now.hour() == 3 && now.minute() == 30 {
-            let _ = tasks.enqueue("audit_log_archive", serde_json::json!({})).await;
-        }
-        // Registered periodic tasks (deduped by type name across tenants —
-        // the asynq route IS the type name).
-        let rows = crate::data::sys_tasks::Entity::find()
-            .filter(
-                sea_orm::sea_query::Condition::all()
-                    .add(crate::data::sys_tasks::Column::Enable.eq(true))
-                    .add(crate::data::sys_tasks::Column::TypeColumn.eq("PERIODIC")),
-            )
-            .all(&state.db)
-            .await
-            .unwrap_or_default();
-        let mut fired_types: Vec<String> = Vec::new();
-        for row in rows {
-            let Some(spec) = row.cron_spec.as_deref() else {
-                continue;
-            };
-            let Ok(cron) = CronSpec::parse(spec) else {
-                eprintln!("[scheduler] invalid cron spec '{spec}' for {}", row.type_name);
-                continue;
-            };
-            if !cron.matches(now) {
-                continue;
-            }
-            if fired_types.contains(&row.type_name) {
-                continue;
-            }
-            fired_types.push(row.type_name.clone());
-            let payload = row
-                .task_payload
-                .as_ref()
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!({}));
-            let _ = tasks.enqueue(&row.type_name, payload).await;
-        }
+/// Builds the cron transport wired to this server's enqueue side.
+pub fn cron_server(
+    state: Arc<AppState>,
+    tasks: Arc<ApalisServer>,
+) -> rushwind_transport_cron::CronServer {
+    use rushwind_transport_cron::{CronJob, CronServer, CronSpec};
+
+    fn spec(spec: &str) -> CronSpec {
+        CronSpec::parse(spec).expect("static cron spec parses")
     }
-}
 
-/// A parsed 5-field cron spec (minute hour dom month dow).
-pub struct CronSpec {
-    fields: [Vec<u32>; 5],
-}
-
-#[derive(Debug)]
-pub struct CronParseError;
-
-impl CronSpec {
-    /// `m h dom mon dow`, `*`, lists `a,b`, ranges `a-b`, steps `*/n`.
-    pub fn parse(spec: &str) -> Result<Self, CronParseError> {
-        let parts: Vec<&str> = spec.split_whitespace().collect();
-        if parts.len() != 5 {
-            return Err(CronParseError);
-        }
-        let bounds: [(u32, u32); 5] = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 6)];
-        let mut fields: [Vec<u32>; 5] = Default::default();
-        for (i, part) in parts.iter().enumerate() {
-            let (lo, hi) = bounds[i];
-            let mut allowed = Vec::new();
-            for atom in part.split(',') {
-                let (base, step) = match atom.split_once('/') {
-                    Some((b, s)) => (b, s.parse::<u32>().map_err(|_| CronParseError)?),
-                    None => (atom, 1),
-                };
-                let (start, end) = if base == "*" {
-                    (lo, hi)
-                } else if let Some((a, b)) = base.split_once('-') {
-                    (
-                        a.parse::<u32>().map_err(|_| CronParseError)?,
-                        b.parse::<u32>().map_err(|_| CronParseError)?,
-                    )
-                } else {
-                    let v: u32 = base.parse().map_err(|_| CronParseError)?;
-                    (v, v)
-                };
-                let mut v = start;
-                while v <= end.min(hi) {
-                    allowed.push(v);
-                    v += step.max(1);
+    // System crons (task_service.go:357-379).
+    let server = CronServer::new("cron://admin")
+        .with_job(CronJob::new(
+            "tenant_expiry_scan",
+            spec("0 * * * *"),
+            {
+                let state = Arc::clone(&state);
+                move || {
+                    let state = Arc::clone(&state);
+                    Box::pin(async move {
+                        ApalisServer::run_handler(
+                            &state.db,
+                            "tenant_expiry_scan",
+                            &serde_json::json!({}),
+                        )
+                        .await;
+                    })
                 }
-            }
-            fields[i] = allowed;
-        }
-        Ok(Self { fields })
-    }
+            },
+        ))
+        .with_job(CronJob::new(
+            "audit_log_archive",
+            spec("30 3 * * *"),
+            {
+                let state = Arc::clone(&state);
+                move || {
+                    let state = Arc::clone(&state);
+                    Box::pin(async move {
+                        ApalisServer::run_handler(
+                            &state.db,
+                            "audit_log_archive",
+                            &serde_json::json!({}),
+                        )
+                        .await;
+                    })
+                }
+            },
+        ));
 
-    /// Whether the spec fires at the given local time.
-    pub fn matches(&self, t: chrono::NaiveDateTime) -> bool {
-        use chrono::{Datelike, Timelike};
-        self.fields[0].contains(&(t.minute()))
-            && self.fields[1].contains(&(t.hour()))
-            && self.fields[2].contains(&(t.day()))
-            && self.fields[4].iter().any(|d| {
-                *d == match t.weekday() {
-                    chrono::Weekday::Sun => 0,
-                    d => d.num_days_from_monday() + 1,
+    // The wildcard job: DB-driven PERIODIC rows. The handler re-reads
+    // `sys_tasks` each tick, so ControlTask/Update/Delete take effect
+    // without a restart.
+    server.with_job(CronJob::new("sys_tasks_periodic", spec("* * * * *"), {
+        let state = Arc::clone(&state);
+        let tasks = Arc::clone(&tasks);
+        move || {
+            let state = Arc::clone(&state);
+            let tasks = Arc::clone(&tasks);
+            Box::pin(async move {
+                use sea_orm::{ColumnTrait as _, EntityTrait as _, QueryFilter as _};
+                use chrono::Timelike as _;
+                let now = crate::data::now();
+                if now.second() != 0 {
+                    return;
+                }
+                let rows = crate::data::sys_tasks::Entity::find()
+                    .filter(
+                        sea_orm::sea_query::Condition::all()
+                            .add(crate::data::sys_tasks::Column::Enable.eq(true))
+                            .add(crate::data::sys_tasks::Column::TypeColumn.eq("PERIODIC")),
+                    )
+                    .all(&state.db)
+                    .await
+                    .unwrap_or_default();
+                let mut fired: Vec<String> = Vec::new();
+                for row in rows {
+                    let Some(s) = row.cron_spec.as_deref() else {
+                        continue;
+                    };
+                    let Ok(spec) = CronSpec::parse(s) else {
+                        eprintln!("[scheduler] invalid cron spec '{s}' for {}", row.type_name);
+                        continue;
+                    };
+                    if !spec.matches(now) || fired.contains(&row.type_name) {
+                        continue;
+                    }
+                    fired.push(row.type_name.clone());
+                    let payload = row
+                        .task_payload
+                        .as_ref()
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!({}));
+                    let _ = tasks.enqueue(&row.type_name, payload).await;
                 }
             })
-    }
+        }
+    }))
 }

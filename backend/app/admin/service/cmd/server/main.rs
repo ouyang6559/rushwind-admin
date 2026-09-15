@@ -89,12 +89,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The periodic cron producer: enabled PERIODIC rows + the two system
     // crons enqueue jobs on cron match.
-    // The cron producer (the asynq scheduler's job) runs alongside.
-    {
-        let sched_state = Arc::clone(&state);
-        let tasks = Arc::clone(&task_server);
-        tokio::spawn(async move { apalis_server::run_cron_producer(sched_state, tasks).await });
-    }
 
     let app = rest_server::build_router(Arc::clone(&state));
 
@@ -108,6 +102,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sse_server = sse_server::new_sse_server(Arc::clone(&state), sse_addr)
         .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
 
+    // The cron producer transport (the asynq scheduler's job): static
+    // system crons + the DB-driven PERIODIC wildcard job.
+    let cron_server = apalis_server::cron_server(Arc::clone(&state), Arc::clone(&task_server));
+
     let server = AxumServer::new(rest_addr, app)?;
     let lifecycle = App::builder()
         .name("admin")
@@ -115,6 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .server(Arc::new(server))
         .server(Arc::new(sse_server))
         .server(task_server)
+        .server(Arc::new(cron_server))
         .build();
     // The lifecycle owns the OS-signal shutdown path internally; the
     // external signal here stays unfired.

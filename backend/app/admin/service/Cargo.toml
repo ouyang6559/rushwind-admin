@@ -14,15 +14,16 @@ path = "cmd/server/main.rs"
 [dependencies]
 admin-api = { path = "../../../api/admin-api" }
 middleware-auth = { path = "../../../pkg/middleware-auth" }
-rushwind-authn = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
-rushwind-authn-jwt = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
-rushwind-http = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
-rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
-rushwind-apalis-postgres = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
+rushwind-authn = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-authn-jwt = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-http = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-transport-cron = { workspace = true }
+rushwind-apalis-postgres = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
 apalis-core = { workspace = true }
-rushwind-transport = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
-rushwind-transport-axum = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
-rushwind-core = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
+rushwind-transport = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-transport-axum = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
+rushwind-core = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "json"] }
 tokio = { workspace = true }
 sea-orm = { workspace = true }

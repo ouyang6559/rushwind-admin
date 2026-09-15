@@ -1,0 +1,19 @@
+{
+  "title": "Redis Cache Monitor",
+  "dbSize": "Total Keys (DBSIZE)",
+  "noInfo": "No INFO data available",
+  "section": "Section",
+  "collapse": "Collapse",
+  "expand": "Expand",
+  "noEntries": "No entries in this section",
+  "collapsed": "Collapsed, click title to expand",
+  "slowlog": "Slow Log (SLOWLOG)",
+  "noSlowlog": "No slow log entries",
+  "disclaimer": "This is a read-only monitoring view. All data comes from Redis INFO/DBSIZE/SLOWLOG. No write operations are performed.",
+  "slowlogId": "Log ID",
+  "createdAt": "Occurred At",
+  "durationUsec": "Duration (μs)",
+  "clientAddr": "Client Address",
+  "clientName": "Client Name",
+  "args": "Command Arguments"
+}

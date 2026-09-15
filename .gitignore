@@ -25,3 +25,8 @@ target
 
 # Differential rig run artifacts (regenerated per sweep)
 backend/testbed/reports/
+
+# Frontend react snapshot build artifacts (the snapshot itself is synced
+# via frontend/admin/sync-react.sh and must stay byte-clean)
+frontend/admin/react/node_modules/
+frontend/admin/react/dist/

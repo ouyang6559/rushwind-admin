@@ -12,8 +12,8 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use crate::state::{
     db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
-use admin_api::proto::pagination::PagingRequest;
-use admin_api::proto::task::service::v1::{
+use gen_rust::proto::pagination::PagingRequest;
+use gen_rust::proto::task::service::v1::{
     ControlTaskRequest, CreateTaskRequest, DeleteTaskRequest, GetTaskRequest, ListTaskResponse,
     ListTaskTypeNameResponse, RestartAllTaskResponse, Task, UpdateTaskRequest,
 };
@@ -95,7 +95,7 @@ impl TaskService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::TaskServiceHandlers for TaskService {
+impl gen_rust::gen::services::TaskServiceHandlers for TaskService {
     async fn list(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
@@ -119,7 +119,7 @@ impl admin_api::gen::services::TaskServiceHandlers for TaskService {
         req: GetTaskRequest,
     ) -> Result<Task, StatusError> {
         let tid = tenant_of(&ctx);
-        let Some(admin_api::proto::task::service::v1::get_task_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::task::service::v1::get_task_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -259,7 +259,7 @@ impl admin_api::gen::services::TaskServiceHandlers for TaskService {
         req: DeleteTaskRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let Some(admin_api::proto::task::service::v1::delete_task_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::task::service::v1::delete_task_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

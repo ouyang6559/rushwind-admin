@@ -6,7 +6,7 @@ use sea_orm::{DatabaseConnection, EntityTrait, PaginatorTrait, QueryOrder, Query
 };
 
 use crate::paging as admin_paging;
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 
 use crate::data::audit;
 use crate::state::{db_err, StatusError};

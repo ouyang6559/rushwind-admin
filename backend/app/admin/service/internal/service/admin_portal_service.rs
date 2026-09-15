@@ -6,12 +6,12 @@ use std::sync::Arc;
 
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-use admin_api::gen::services::AdminPortalServiceHandlers;
-use admin_api::proto::admin::service::v1::{
+use gen_rust::gen::services::AdminPortalServiceHandlers;
+use gen_rust::proto::admin::service::v1::{
     InitialContextResponse, ListPermissionCodeResponse, ListRouteResponse,
 };
-use admin_api::proto::identity::service::v1::User;
-use admin_api::proto::permission::service::v1::MenuRouteItem;
+use gen_rust::proto::identity::service::v1::User;
+use gen_rust::proto::permission::service::v1::MenuRouteItem;
 use pbjson_types::Empty;
 
 use crate::state::{internal_error, status_error, AppState};
@@ -122,12 +122,12 @@ pub fn user_to_proto(user: crate::data::sys_users::Model, role_codes: Vec<String
 /// entity jsonb (protojson keys) → MenuMeta proto.
 pub fn menu_meta_from_json(
     value: &serde_json::Value,
-) -> Option<admin_api::proto::permission::service::v1::MenuMeta> {
+) -> Option<gen_rust::proto::permission::service::v1::MenuMeta> {
     let obj = value.as_object()?;
     let str_at = |k: &str| obj.get(k).and_then(|v| v.as_str()).map(String::from);
     let bool_at = |k: &str| obj.get(k).and_then(|v| v.as_bool());
     let i32_at = |k: &str| obj.get(k).and_then(|v| v.as_i64()).map(|v| v as i32);
-    Some(admin_api::proto::permission::service::v1::MenuMeta {
+    Some(gen_rust::proto::permission::service::v1::MenuMeta {
         active_icon: str_at("activeIcon"),
         active_path: str_at("activePath"),
         affix_tab: bool_at("affixTab"),
@@ -164,7 +164,7 @@ pub fn menu_meta_from_json(
 
 /// MenuMeta proto → the jsonb shape (protojson camelCase keys).
 pub fn menu_meta_to_json(
-    meta: &admin_api::proto::permission::service::v1::MenuMeta,
+    meta: &gen_rust::proto::permission::service::v1::MenuMeta,
 ) -> serde_json::Value {
     let mut obj = serde_json::Map::new();
     let put_str =

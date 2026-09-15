@@ -9,8 +9,8 @@ use sea_orm::sea_query::{Alias, BinOper, Condition, Expr, ExprTrait, Func, Simpl
 use sea_orm::Value as QValue;
 use sea_orm::{QueryFilter, QueryOrder, QuerySelect, Select};
 
-use admin_api::proto::pagination::paging_request::FilteringType;
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::paging_request::FilteringType;
+use gen_rust::proto::pagination::PagingRequest;
 
 /// The resolved page slice.
 pub struct Paging {

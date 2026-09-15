@@ -52,7 +52,7 @@ impl<'a> InternalMessageRepo<'a> {
     pub async fn paged_list(
         &self,
         tenant_id: u32,
-        req: &admin_api::proto::pagination::PagingRequest,
+        req: &gen_rust::proto::pagination::PagingRequest,
     ) -> Result<(Vec<internal_messages::Model>, u64), StatusError> {
         use sea_orm::PaginatorTrait;
         let base = internal_messages::Entity::find()
@@ -111,7 +111,7 @@ impl<'a> InternalMessageRecipientRepo<'a> {
     pub async fn paged_inbox(
         &self,
         user_id: u32,
-        req: &admin_api::proto::pagination::PagingRequest,
+        req: &gen_rust::proto::pagination::PagingRequest,
     ) -> Result<(Vec<internal_message_recipients::Model>, u64), StatusError> {
         use sea_orm::PaginatorTrait;
         let base = internal_message_recipients::Entity::find()

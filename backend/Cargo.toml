@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["api/admin-api", "app/admin/service", "pkg/*", "testbed/admin-diff"]
+members = ["api/gen/rust", "app/admin/service", "pkg/*", "testbed/admin-diff"]
 
 [workspace.package]
 version = "0.0.1"

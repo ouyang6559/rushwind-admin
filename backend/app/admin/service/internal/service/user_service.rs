@@ -15,11 +15,11 @@ use crate::data::scope::Viewer;
 use crate::state::{
     db_err, internal_error, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
-use admin_api::proto::identity::service::v1::{
+use gen_rust::proto::identity::service::v1::{
     CreateUserRequest, DeleteUserRequest, EditUserPasswordRequest, GetUserRequest,
     ListUserResponse, UpdateUserRequest, User, UserExistsRequest, UserExistsResponse,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 use crate::service::admin_portal_service::user_to_proto;
@@ -200,7 +200,7 @@ impl UserService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::UserServiceHandlers for UserService {
+impl gen_rust::gen::services::UserServiceHandlers for UserService {
     async fn list(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
@@ -237,13 +237,13 @@ impl admin_api::gen::services::UserServiceHandlers for UserService {
     ) -> Result<User, StatusError> {
         let tid = tenant_of(&ctx);
         let row = match req.query_by {
-            Some(admin_api::proto::identity::service::v1::get_user_request::QueryBy::Id(id)) => {
+            Some(gen_rust::proto::identity::service::v1::get_user_request::QueryBy::Id(id)) => {
                 crate::data::sys_users::Entity::find_by_id(id)
                     .one(&self.state.db)
                     .await
                     .map_err(db_err)?
             }
-            Some(admin_api::proto::identity::service::v1::get_user_request::QueryBy::Username(
+            Some(gen_rust::proto::identity::service::v1::get_user_request::QueryBy::Username(
                 name,
             )) => self.find_by_username(tid, &name).await?,
             None => None,
@@ -343,11 +343,11 @@ impl admin_api::gen::services::UserServiceHandlers for UserService {
     ) -> Result<Empty, StatusError> {
         let tid = tenant_of(&ctx);
         let id = match req.query_by {
-            Some(admin_api::proto::identity::service::v1::delete_user_request::QueryBy::Id(id)) => {
+            Some(gen_rust::proto::identity::service::v1::delete_user_request::QueryBy::Id(id)) => {
                 id
             }
             Some(
-                admin_api::proto::identity::service::v1::delete_user_request::QueryBy::Username(
+                gen_rust::proto::identity::service::v1::delete_user_request::QueryBy::Username(
                     name,
                 ),
             ) => self
@@ -386,7 +386,7 @@ impl admin_api::gen::services::UserServiceHandlers for UserService {
     ) -> Result<UserExistsResponse, StatusError> {
         let tid = tenant_of(&ctx);
         let exist = match req.query_by {
-            Some(admin_api::proto::identity::service::v1::user_exists_request::QueryBy::Id(id)) => {
+            Some(gen_rust::proto::identity::service::v1::user_exists_request::QueryBy::Id(id)) => {
                 crate::data::sys_users::Entity::find_by_id(id)
                     .one(&self.state.db)
                     .await
@@ -394,7 +394,7 @@ impl admin_api::gen::services::UserServiceHandlers for UserService {
                     .is_some()
             }
             Some(
-                admin_api::proto::identity::service::v1::user_exists_request::QueryBy::Username(
+                gen_rust::proto::identity::service::v1::user_exists_request::QueryBy::Username(
                     name,
                 ),
             ) => self.find_by_username(tid, &name).await?.is_some(),

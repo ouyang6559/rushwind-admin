@@ -13,8 +13,8 @@ use crate::data::scope::Viewer;
 use crate::state::{
     db_err, internal_error, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
-use admin_api::proto::pagination::PagingRequest;
-use admin_api::proto::permission::service::v1::{
+use gen_rust::proto::pagination::PagingRequest;
+use gen_rust::proto::permission::service::v1::{
     CreateRoleRequest, DeleteRoleRequest, GetRoleRequest, ListRoleResponse, Role,
     RoleFieldPermission, UpdateRoleRequest,
 };
@@ -231,7 +231,7 @@ impl RoleService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::RoleServiceHandlers for RoleService {
+impl gen_rust::gen::services::RoleServiceHandlers for RoleService {
     async fn list(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
@@ -254,13 +254,13 @@ impl admin_api::gen::services::RoleServiceHandlers for RoleService {
     ) -> Result<Role, StatusError> {
         let tid = tenant_of(&ctx);
         let row = match req.query_by {
-            Some(admin_api::proto::permission::service::v1::get_role_request::QueryBy::Id(id)) => {
+            Some(gen_rust::proto::permission::service::v1::get_role_request::QueryBy::Id(id)) => {
                 crate::data::sys_roles::Entity::find_by_id(id)
                     .one(&self.state.db)
                     .await
                     .map_err(db_err)?
             }
-            Some(admin_api::proto::permission::service::v1::get_role_request::QueryBy::Code(
+            Some(gen_rust::proto::permission::service::v1::get_role_request::QueryBy::Code(
                 code,
             )) => crate::data::sys_roles::Entity::find()
                 .filter(
@@ -271,7 +271,7 @@ impl admin_api::gen::services::RoleServiceHandlers for RoleService {
                 .one(&self.state.db)
                 .await
                 .map_err(db_err)?,
-            Some(admin_api::proto::permission::service::v1::get_role_request::QueryBy::Name(
+            Some(gen_rust::proto::permission::service::v1::get_role_request::QueryBy::Name(
                 name,
             )) => crate::data::sys_roles::Entity::find()
                 .filter(
@@ -346,7 +346,7 @@ impl admin_api::gen::services::RoleServiceHandlers for RoleService {
         req: DeleteRoleRequest,
     ) -> Result<Empty, StatusError> {
         let tid = tenant_of(&ctx);
-        let Some(admin_api::proto::permission::service::v1::delete_role_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::permission::service::v1::delete_role_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

@@ -6,7 +6,7 @@ use prost_reflect::{DescriptorPool, DynamicMessage};
 use rushwind_http_binding::binder::bind_form;
 
 fn pool() -> &'static DescriptorPool {
-    admin_api::pool()
+    gen_rust::pool()
 }
 
 fn fresh(fq: &str) -> DynamicMessage {
@@ -18,7 +18,7 @@ fn fresh(fq: &str) -> DynamicMessage {
 fn unknown_key_silent_skip() {
     let mut m = fresh("dict.service.v1.GetLanguageRequest");
     bind_form(&mut m, &[("nope".into(), vec!["x".into()])]).unwrap();
-    let out: admin_api::proto::dict::service::v1::GetLanguageRequest = m.transcode_to().unwrap();
+    let out: gen_rust::proto::dict::service::v1::GetLanguageRequest = m.transcode_to().unwrap();
     assert!(out.query_by.is_none());
 }
 
@@ -27,7 +27,7 @@ fn unknown_key_silent_skip() {
 fn empty_value_skip() {
     let mut m = fresh("dict.service.v1.GetLanguageRequest");
     bind_form(&mut m, &[("id".into(), vec![String::new()])]).unwrap();
-    let out: admin_api::proto::dict::service::v1::GetLanguageRequest = m.transcode_to().unwrap();
+    let out: gen_rust::proto::dict::service::v1::GetLanguageRequest = m.transcode_to().unwrap();
     assert!(out.query_by.is_none());
 }
 
@@ -36,10 +36,10 @@ fn empty_value_skip() {
 fn oneof_member_by_proto_name() {
     let mut m = fresh("dict.service.v1.GetLanguageRequest");
     bind_form(&mut m, &[("id".into(), vec!["5".into()])]).unwrap();
-    let out: admin_api::proto::dict::service::v1::GetLanguageRequest = m.transcode_to().unwrap();
+    let out: gen_rust::proto::dict::service::v1::GetLanguageRequest = m.transcode_to().unwrap();
     assert!(matches!(
         out.query_by,
-        Some(admin_api::proto::dict::service::v1::get_language_request::QueryBy::Id(5))
+        Some(gen_rust::proto::dict::service::v1::get_language_request::QueryBy::Id(5))
     ));
 }
 
@@ -73,7 +73,7 @@ fn multi_value_singular_rejected() {
 fn field_mask_json_name_snake_normalization() {
     let mut m = fresh("dict.service.v1.UpdateLanguageRequest");
     bind_form(&mut m, &[("updateMask".into(), vec!["aB,cD_e".into()])]).unwrap();
-    let out: admin_api::proto::dict::service::v1::UpdateLanguageRequest = m.transcode_to().unwrap();
+    let out: gen_rust::proto::dict::service::v1::UpdateLanguageRequest = m.transcode_to().unwrap();
     let mask = out.update_mask.expect("mask set").paths;
     assert_eq!(mask, &["a_b".to_string(), "c_d_e".to_string()]);
 }
@@ -91,7 +91,7 @@ fn repeated_append_and_suffix() {
         ],
     )
     .unwrap();
-    let out: admin_api::proto::dict::service::v1::BatchCreateLanguagesResponse =
+    let out: gen_rust::proto::dict::service::v1::BatchCreateLanguagesResponse =
         m.transcode_to().unwrap();
     assert_eq!(out.created_ids, &[7, 8, 9]);
 }
@@ -108,7 +108,7 @@ fn go_parse_bool_spellings() {
         ],
     )
     .unwrap();
-    let out: admin_api::proto::dict::service::v1::Language = m.transcode_to().unwrap();
+    let out: gen_rust::proto::dict::service::v1::Language = m.transcode_to().unwrap();
     assert_eq!(out.is_default, Some(true));
     assert_eq!(out.is_enabled, Some(true));
 }
@@ -123,7 +123,7 @@ fn nested_timestamp_rfc3339() {
         &[("data.createdAt".into(), vec!["2009-01-01T10:00:00Z".into()])],
     )
     .unwrap();
-    let out: admin_api::proto::dict::service::v1::CreateLanguageRequest = m.transcode_to().unwrap();
+    let out: gen_rust::proto::dict::service::v1::CreateLanguageRequest = m.transcode_to().unwrap();
     let ts = out
         .data
         .as_ref()

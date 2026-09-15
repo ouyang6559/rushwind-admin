@@ -9,29 +9,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "admin-api"
-version = "0.0.1"
-dependencies = [
- "async-trait",
- "axum",
- "pbjson",
- "pbjson-build",
- "pbjson-types",
- "prost",
- "prost-build",
- "prost-reflect",
- "protox",
- "rushwind-gen-http",
- "rushwind-http-binding",
- "serde",
- "tokio",
-]
-
-[[package]]
 name = "admin-diff"
 version = "0.0.1"
 dependencies = [
- "admin-api",
+ "gen-rust",
  "reqwest",
  "serde",
  "serde_json",
@@ -41,7 +22,6 @@ dependencies = [
 name = "admin-service"
 version = "0.0.1"
 dependencies = [
- "admin-api",
  "aes",
  "aes-gcm",
  "apalis-core",
@@ -53,6 +33,7 @@ dependencies = [
  "cbc",
  "chrono",
  "futures-util",
+ "gen-rust",
  "hex",
  "hmac 0.12.1",
  "middleware-auth",
@@ -1259,6 +1240,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "gen-rust"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "axum",
+ "pbjson",
+ "pbjson-build",
+ "pbjson-types",
+ "prost",
+ "prost-build",
+ "prost-reflect",
+ "protox",
+ "rushwind-gen-http",
+ "rushwind-http-binding",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2027,9 +2027,9 @@ dependencies = [
 name = "middleware-auth"
 version = "0.0.1"
 dependencies = [
- "admin-api",
  "async-trait",
  "axum",
+ "gen-rust",
  "rushwind-authn",
  "rushwind-http-binding",
 ]

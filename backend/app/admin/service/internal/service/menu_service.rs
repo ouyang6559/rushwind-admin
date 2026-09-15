@@ -6,8 +6,8 @@ use std::sync::Arc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
-use admin_api::proto::pagination::PagingRequest;
-use admin_api::proto::permission::service::v1::{
+use gen_rust::proto::pagination::PagingRequest;
+use gen_rust::proto::permission::service::v1::{
     CreateMenuRequest, DeleteMenuRequest, GetMenuRequest, ListMenuResponse, Menu, SyncMenusRequest,
     UpdateMenuRequest,
 };
@@ -141,7 +141,7 @@ impl MenuService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::MenuServiceHandlers for MenuService {
+impl gen_rust::gen::services::MenuServiceHandlers for MenuService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -161,7 +161,7 @@ impl admin_api::gen::services::MenuServiceHandlers for MenuService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetMenuRequest,
     ) -> Result<Menu, StatusError> {
-        let Some(admin_api::proto::permission::service::v1::get_menu_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::permission::service::v1::get_menu_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -224,7 +224,7 @@ impl admin_api::gen::services::MenuServiceHandlers for MenuService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeleteMenuRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(admin_api::proto::permission::service::v1::delete_menu_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::permission::service::v1::delete_menu_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

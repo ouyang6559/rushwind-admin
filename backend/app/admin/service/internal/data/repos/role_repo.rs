@@ -40,7 +40,7 @@ impl<'a> RoleRepo<'a> {
     /// Paged listing over the PagingRequest contract: returns (rows, total).
     pub async fn paged_list(
         &self,
-        req: &admin_api::proto::pagination::PagingRequest,
+        req: &gen_rust::proto::pagination::PagingRequest,
     ) -> Result<(Vec<roles::Model>, u64), StatusError> {
         use sea_orm::PaginatorTrait;
         let base = roles::Entity::find()

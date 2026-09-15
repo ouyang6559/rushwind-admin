@@ -16,12 +16,12 @@ use sea_orm::{
 use crate::state::{
     db_err, internal_error, not_found, operator_of, status_error, AppState, StatusError,
 };
-use admin_api::proto::identity::service::v1::{
+use gen_rust::proto::identity::service::v1::{
     CleanupTenantDataRequest, CreateTenantRequest, CreateTenantWithAdminUserRequest,
     DeleteTenantRequest, GetTenantRequest, GetTenantUsageRequest, ListTenantResponse, Tenant,
     TenantExistsRequest, TenantExistsResponse, TenantUsage, UpdateTenantRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 fn status_to_proto(s: &str) -> i32 {
@@ -102,9 +102,9 @@ pub struct TenantService {
 impl TenantService {
     async fn find(
         &self,
-        query: admin_api::proto::identity::service::v1::get_tenant_request::QueryBy,
+        query: gen_rust::proto::identity::service::v1::get_tenant_request::QueryBy,
     ) -> Result<Option<crate::data::sys_tenants::Model>, StatusError> {
-        use admin_api::proto::identity::service::v1::get_tenant_request::QueryBy;
+        use gen_rust::proto::identity::service::v1::get_tenant_request::QueryBy;
         match query {
             QueryBy::Id(id) => crate::data::sys_tenants::Entity::find_by_id(id)
                 .one(&self.state.db)
@@ -128,7 +128,7 @@ impl TenantService {
         &self,
         txn: &DatabaseTransaction,
         tenant_data: Tenant,
-        admin_user: admin_api::proto::identity::service::v1::User,
+        admin_user: gen_rust::proto::identity::service::v1::User,
         password: &str,
         operator_id: u32,
     ) -> Result<(), StatusError> {
@@ -312,7 +312,7 @@ impl TenantService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::TenantServiceHandlers for TenantService {
+impl gen_rust::gen::services::TenantServiceHandlers for TenantService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -459,7 +459,7 @@ impl admin_api::gen::services::TenantServiceHandlers for TenantService {
         req: DeleteTenantRequest,
     ) -> Result<Empty, StatusError> {
         let _ = operator_of(&ctx)?;
-        let Some(admin_api::proto::identity::service::v1::delete_tenant_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::identity::service::v1::delete_tenant_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

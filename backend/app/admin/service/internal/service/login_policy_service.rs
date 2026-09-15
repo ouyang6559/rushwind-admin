@@ -7,11 +7,11 @@ use std::sync::Arc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
-use admin_api::proto::authentication::service::v1::{
+use gen_rust::proto::authentication::service::v1::{
     CreateLoginPolicyRequest, DeleteLoginPolicyRequest, GetLoginPolicyRequest,
     ListLoginPolicyResponse, LoginPolicy, UpdateLoginPolicyRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 fn type_to_str(v: i32) -> String {
@@ -74,7 +74,7 @@ pub struct LoginPolicyService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::LoginPolicyServiceHandlers for LoginPolicyService {
+impl gen_rust::gen::services::LoginPolicyServiceHandlers for LoginPolicyService {
     async fn list(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
@@ -97,7 +97,7 @@ impl admin_api::gen::services::LoginPolicyServiceHandlers for LoginPolicyService
         req: GetLoginPolicyRequest,
     ) -> Result<LoginPolicy, StatusError> {
         let Some(
-            admin_api::proto::authentication::service::v1::get_login_policy_request::QueryBy::Id(
+            gen_rust::proto::authentication::service::v1::get_login_policy_request::QueryBy::Id(
                 id,
             ),
         ) = req.query_by
@@ -189,7 +189,7 @@ impl admin_api::gen::services::LoginPolicyServiceHandlers for LoginPolicyService
         req: DeleteLoginPolicyRequest,
     ) -> Result<Empty, StatusError> {
         let Some(
-            admin_api::proto::authentication::service::v1::delete_login_policy_request::QueryBy::Id(
+            gen_rust::proto::authentication::service::v1::delete_login_policy_request::QueryBy::Id(
                 id,
             ),
         ) = req.query_by

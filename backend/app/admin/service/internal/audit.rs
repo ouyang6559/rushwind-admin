@@ -64,7 +64,7 @@ fn path_matches(template: &str, path: &str) -> bool {
 
 /// Resolves the operation id by matching the static route table.
 fn resolve_operation(method: &Method, path: &str) -> &'static str {
-    for spec in admin_api::gen::routes::ROUTES {
+    for spec in gen_rust::gen::routes::ROUTES {
         if spec.method == method.as_str() && path_matches(spec.path, path) {
             return spec.operation_id;
         }

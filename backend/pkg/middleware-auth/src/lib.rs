@@ -95,6 +95,6 @@ fn unauthorized(err: AuthnError) -> rushwind_http_binding::envelope::StatusError
         AuthnError::MissingBearerToken => "missing bearer token",
         _ => "access token expired",
     };
-    let status = admin_api::tables::error_status("admin.service.v1", "UNAUTHORIZED").unwrap_or(401);
+    let status = gen_rust::tables::error_status("admin.service.v1", "UNAUTHORIZED").unwrap_or(401);
     rushwind_http_binding::envelope::StatusError::new(status, "UNAUTHORIZED", message)
 }

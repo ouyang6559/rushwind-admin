@@ -8,13 +8,13 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
-use admin_api::gen::services::AccessKeyServiceHandlers;
-use admin_api::proto::access_key::service::v1::{
+use gen_rust::gen::services::AccessKeyServiceHandlers;
+use gen_rust::proto::access_key::service::v1::{
     AccessKey, CreateAccessKeyRequest, CreateAccessKeyResponse, DeleteAccessKeyRequest,
     GetAccessKeyRequest, IssueTokenRequest, IssueTokenResponse, ListAccessKeyResponse,
     ResetAccessKeySecretRequest, UpdateAccessKeyRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 use crate::state::{internal_error, status_error, AppState};
@@ -93,13 +93,13 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         let query = crate::data::sys_access_keys::Entity::find()
             .filter(crate::data::sys_access_keys::Column::TenantId.eq(payload.tenant_id));
         let row = match req.query_by {
-            Some(admin_api::proto::access_key::service::v1::get_access_key_request::QueryBy::Id(id)) => {
+            Some(gen_rust::proto::access_key::service::v1::get_access_key_request::QueryBy::Id(id)) => {
                 crate::data::sys_access_keys::Entity::find_by_id(id)
                     .one(&self.state.db)
                     .await
                     .map_err(|e| internal_error(format!("db: {e}")))?
             }
-            Some(admin_api::proto::access_key::service::v1::get_access_key_request::QueryBy::AccessKey(ak)) => {
+            Some(gen_rust::proto::access_key::service::v1::get_access_key_request::QueryBy::AccessKey(ak)) => {
                 query
                     .filter(crate::data::sys_access_keys::Column::AccessKey.eq(ak))
                     .one(&self.state.db)

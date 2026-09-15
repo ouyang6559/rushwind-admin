@@ -11,9 +11,9 @@ use std::sync::Arc;
 use sea_orm::sea_query::Condition;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-use admin_api::gen::services::AuthenticationServiceHandlers;
-use admin_api::proto::authentication::service::v1::{login_request, GrantType};
-use admin_api::proto::authentication::service::v1::{
+use gen_rust::gen::services::AuthenticationServiceHandlers;
+use gen_rust::proto::authentication::service::v1::{login_request, GrantType};
+use gen_rust::proto::authentication::service::v1::{
     ForgotPasswordRequest, GenerateCaptchaResponse, LoginRequest, LoginResponse,
     ResetPasswordByCodeRequest, VerifyCaptchaRequest, VerifyCaptchaResponse,
 };

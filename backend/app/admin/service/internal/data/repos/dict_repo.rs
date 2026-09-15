@@ -38,7 +38,7 @@ impl<'a> DictTypeRepo<'a> {
     /// Paged listing over the PagingRequest contract: returns (rows, total).
     pub async fn paged_list(
         &self,
-        req: &admin_api::proto::pagination::PagingRequest,
+        req: &gen_rust::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_dict_types::Model>, u64), StatusError> {
         use sea_orm::PaginatorTrait;
         let base = sys_dict_types::Entity::find()
@@ -108,7 +108,7 @@ impl<'a> DictEntryRepo<'a> {
     /// Paged listing over the PagingRequest contract: returns (rows, total).
     pub async fn paged_list(
         &self,
-        req: &admin_api::proto::pagination::PagingRequest,
+        req: &gen_rust::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_dict_entries::Model>, u64), StatusError> {
         use sea_orm::PaginatorTrait;
         let base = sys_dict_entries::Entity::find()

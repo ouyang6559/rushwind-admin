@@ -6,8 +6,8 @@ use std::sync::Arc;
 use sea_orm::{ActiveModelTrait, EntityTrait, PaginatorTrait, QueryOrder, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
-use admin_api::proto::pagination::PagingRequest;
-use admin_api::proto::permission::service::v1::{
+use gen_rust::proto::pagination::PagingRequest;
+use gen_rust::proto::permission::service::v1::{
     CreatePermissionGroupRequest, DeletePermissionGroupRequest, GetPermissionGroupRequest,
     ListPermissionGroupResponse, PermissionGroup, UpdatePermissionGroupRequest,
 };
@@ -46,7 +46,7 @@ pub struct PermissionGroupService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::PermissionGroupServiceHandlers for PermissionGroupService {
+impl gen_rust::gen::services::PermissionGroupServiceHandlers for PermissionGroupService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -76,7 +76,7 @@ impl admin_api::gen::services::PermissionGroupServiceHandlers for PermissionGrou
         req: GetPermissionGroupRequest,
     ) -> Result<PermissionGroup, StatusError> {
         let Some(
-            admin_api::proto::permission::service::v1::get_permission_group_request::QueryBy::Id(
+            gen_rust::proto::permission::service::v1::get_permission_group_request::QueryBy::Id(
                 id,
             ),
         ) = req.query_by
@@ -166,7 +166,7 @@ impl admin_api::gen::services::PermissionGroupServiceHandlers for PermissionGrou
         req: DeletePermissionGroupRequest,
     ) -> Result<Empty, StatusError> {
         let Some(
-            admin_api::proto::permission::service::v1::delete_permission_group_request::QueryBy::Id(
+            gen_rust::proto::permission::service::v1::delete_permission_group_request::QueryBy::Id(
                 id,
             ),
         ) = req.query_by

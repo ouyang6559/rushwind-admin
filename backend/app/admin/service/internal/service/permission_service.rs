@@ -11,8 +11,8 @@ use std::sync::Arc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
-use admin_api::proto::pagination::PagingRequest;
-use admin_api::proto::permission::service::v1::{
+use gen_rust::proto::pagination::PagingRequest;
+use gen_rust::proto::permission::service::v1::{
     CreatePermissionRequest, DeletePermissionRequest, GetPermissionRequest, ListPermissionResponse,
     Permission, UpdatePermissionRequest,
 };
@@ -345,7 +345,7 @@ impl PermissionService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::PermissionServiceHandlers for PermissionService {
+impl gen_rust::gen::services::PermissionServiceHandlers for PermissionService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -369,7 +369,7 @@ impl admin_api::gen::services::PermissionServiceHandlers for PermissionService {
         req: GetPermissionRequest,
     ) -> Result<Permission, StatusError> {
         let _ = &ctx;
-        let Some(admin_api::proto::permission::service::v1::get_permission_request::QueryBy::Id(
+        let Some(gen_rust::proto::permission::service::v1::get_permission_request::QueryBy::Id(
             id,
         )) = req.query_by
         else {
@@ -515,7 +515,7 @@ impl admin_api::gen::services::PermissionServiceHandlers for PermissionService {
     ) -> Result<Empty, StatusError> {
         let _ = operator_of(&ctx)?;
         let Some(
-            admin_api::proto::permission::service::v1::delete_permission_request::QueryBy::Id(id),
+            gen_rust::proto::permission::service::v1::delete_permission_request::QueryBy::Id(id),
         ) = req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

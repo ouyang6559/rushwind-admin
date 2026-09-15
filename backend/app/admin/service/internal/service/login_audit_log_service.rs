@@ -6,10 +6,10 @@ use std::sync::Arc;
 use sea_orm::EntityTrait;
 
 use crate::state::{db_err, not_found, AppState, StatusError};
-use admin_api::proto::audit::service::v1::{
+use gen_rust::proto::audit::service::v1::{
     GetLoginAuditLogRequest, ListLoginAuditLogResponse, LoginAuditLog,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 
 fn log_proto(r: crate::data::audit::sys_login_audit_logs::Model) -> LoginAuditLog {
     LoginAuditLog {
@@ -74,7 +74,7 @@ pub struct LoginAuditLogService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::LoginAuditLogServiceHandlers for LoginAuditLogService {
+impl gen_rust::gen::services::LoginAuditLogServiceHandlers for LoginAuditLogService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -93,7 +93,7 @@ impl admin_api::gen::services::LoginAuditLogServiceHandlers for LoginAuditLogSer
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetLoginAuditLogRequest,
     ) -> Result<LoginAuditLog, StatusError> {
-        let Some(admin_api::proto::audit::service::v1::get_login_audit_log_request::QueryBy::Id(
+        let Some(gen_rust::proto::audit::service::v1::get_login_audit_log_request::QueryBy::Id(
             id,
         )) = req.query_by
         else {

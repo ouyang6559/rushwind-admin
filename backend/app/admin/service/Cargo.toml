@@ -12,7 +12,7 @@ name = "admin-server"
 path = "cmd/server/main.rs"
 
 [dependencies]
-admin-api = { path = "../../../api/admin-api" }
+gen-rust = { path = "../../../api/gen/rust" }
 middleware-auth = { path = "../../../pkg/middleware-auth" }
 rushwind-authn = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }
 rushwind-authn-jwt = { git = "https://github.com/tx7do/rushwind", rev = "8c7a5815ad21625299f95db806b115d6db538c60" }

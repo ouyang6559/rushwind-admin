@@ -9,11 +9,11 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrde
 use crate::state::{
     db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
-use admin_api::proto::dict::service::v1::{
+use gen_rust::proto::dict::service::v1::{
     CreateDictEntryRequest, DeleteDictEntryRequest, DictEntry, ListDictEntryByTypeCodeRequest,
     ListDictEntryByTypeCodeResponse, ListDictEntryResponse, UpdateDictEntryRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 fn dict_entry_proto(r: crate::data::sys_dict_entries::Model) -> DictEntry {
@@ -42,7 +42,7 @@ pub struct DictEntryService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::DictEntryServiceHandlers for DictEntryService {
+impl gen_rust::gen::services::DictEntryServiceHandlers for DictEntryService {
     async fn list(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,

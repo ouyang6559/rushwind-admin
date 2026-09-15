@@ -6,10 +6,10 @@ use std::sync::Arc;
 use sea_orm::EntityTrait;
 
 use crate::state::{db_err, not_found, AppState, StatusError};
-use admin_api::proto::audit::service::v1::{
+use gen_rust::proto::audit::service::v1::{
     GetPermissionAuditLogRequest, ListPermissionAuditLogResponse, PermissionAuditLog,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 
 fn log_proto(r: crate::data::audit::sys_permission_audit_logs::Model) -> PermissionAuditLog {
     PermissionAuditLog {
@@ -54,7 +54,7 @@ pub struct PermissionAuditLogService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::PermissionAuditLogServiceHandlers for PermissionAuditLogService {
+impl gen_rust::gen::services::PermissionAuditLogServiceHandlers for PermissionAuditLogService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -74,7 +74,7 @@ impl admin_api::gen::services::PermissionAuditLogServiceHandlers for PermissionA
         req: GetPermissionAuditLogRequest,
     ) -> Result<PermissionAuditLog, StatusError> {
         let Some(
-            admin_api::proto::audit::service::v1::get_permission_audit_log_request::QueryBy::Id(id),
+            gen_rust::proto::audit::service::v1::get_permission_audit_log_request::QueryBy::Id(id),
         ) = req.query_by
         else {
             return Err(crate::state::status_error(

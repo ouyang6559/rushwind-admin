@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
-use admin_api::gen::services::UserProfileServiceHandlers;
-use admin_api::proto::identity::service::v1::{
+use gen_rust::gen::services::UserProfileServiceHandlers;
+use gen_rust::proto::identity::service::v1::{
     BindContactRequest, ChangePasswordRequest, UpdateUserRequest, UploadAvatarRequest,
     UploadAvatarResponse, User, VerifyContactRequest,
 };
@@ -216,7 +216,7 @@ impl UserProfileServiceHandlers for UserProfileService {
         // object store. (The reference uploads to MinIO and stores the link.)
         let data_url = match &req.source {
             Some(
-                admin_api::proto::identity::service::v1::upload_avatar_request::Source::ImageBase64(
+                gen_rust::proto::identity::service::v1::upload_avatar_request::Source::ImageBase64(
                     b64,
                 ),
             ) => {
@@ -227,7 +227,7 @@ impl UserProfileServiceHandlers for UserProfileService {
                 }
             }
             Some(
-                admin_api::proto::identity::service::v1::upload_avatar_request::Source::ImageUrl(
+                gen_rust::proto::identity::service::v1::upload_avatar_request::Source::ImageUrl(
                     url,
                 ),
             ) => url.clone(),
@@ -282,12 +282,12 @@ impl UserProfileServiceHandlers for UserProfileService {
         let mut active: crate::data::sys_users::ActiveModel = row.into();
         match req.contact {
             Some(
-                admin_api::proto::identity::service::v1::bind_contact_request::Contact::Phone(p),
+                gen_rust::proto::identity::service::v1::bind_contact_request::Contact::Phone(p),
             ) => {
                 active.mobile = Set(Some(p.phone));
             }
             Some(
-                admin_api::proto::identity::service::v1::bind_contact_request::Contact::Email(e),
+                gen_rust::proto::identity::service::v1::bind_contact_request::Contact::Email(e),
             ) => {
                 active.email = Set(Some(e.email));
             }

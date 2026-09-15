@@ -10,8 +10,8 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::state::{internal_error, status_error, AppState, StatusError};
 use crate::token::{new_jwt_id, SessionMeta, UserTokenPayload};
-use admin_api::gen::services::MfaServiceHandlers;
-use admin_api::proto::authentication::service::v1::{
+use gen_rust::gen::services::MfaServiceHandlers;
+use gen_rust::proto::authentication::service::v1::{
     confirm_enroll_method_request, start_enroll_method_response, verify_mfa_challenge_request,
     ConfirmEnrollMethodRequest, ConfirmEnrollMethodResponse, DisableMfaRequest, EnrolledMethod,
     GetMfaStatusRequest, GetMfaStatusResponse, ListEnrolledMethodsRequest,

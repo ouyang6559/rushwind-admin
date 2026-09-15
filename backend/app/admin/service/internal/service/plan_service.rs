@@ -7,13 +7,13 @@ use std::sync::Arc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
-use admin_api::proto::identity::service::v1::{
+use gen_rust::proto::identity::service::v1::{
     CreatePlanModuleRequest, CreatePlanQuotaRequest, CreatePlanRequest, DeletePlanModuleRequest,
     DeletePlanQuotaRequest, DeletePlanRequest, GetPlanModuleRequest, GetPlanRequest,
     ListPlanModuleResponse, ListPlanQuotaResponse, ListPlanResponse, Plan, PlanModule, PlanQuota,
     UpdatePlanModuleRequest, UpdatePlanQuotaRequest, UpdatePlanRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 fn plan_version_to_str(v: i32) -> String {
@@ -140,7 +140,7 @@ pub struct PlanService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::PlanServiceHandlers for PlanService {
+impl gen_rust::gen::services::PlanServiceHandlers for PlanService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -160,7 +160,7 @@ impl admin_api::gen::services::PlanServiceHandlers for PlanService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetPlanRequest,
     ) -> Result<Plan, StatusError> {
-        let Some(admin_api::proto::identity::service::v1::get_plan_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::identity::service::v1::get_plan_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -243,7 +243,7 @@ impl admin_api::gen::services::PlanServiceHandlers for PlanService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeletePlanRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(admin_api::proto::identity::service::v1::delete_plan_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::identity::service::v1::delete_plan_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -272,7 +272,7 @@ pub struct PlanModuleService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::PlanModuleServiceHandlers for PlanModuleService {
+impl gen_rust::gen::services::PlanModuleServiceHandlers for PlanModuleService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -294,7 +294,7 @@ impl admin_api::gen::services::PlanModuleServiceHandlers for PlanModuleService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetPlanModuleRequest,
     ) -> Result<PlanModule, StatusError> {
-        let Some(admin_api::proto::identity::service::v1::get_plan_module_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::identity::service::v1::get_plan_module_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -358,7 +358,7 @@ impl admin_api::gen::services::PlanModuleServiceHandlers for PlanModuleService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeletePlanModuleRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(admin_api::proto::identity::service::v1::delete_plan_module_request::QueryBy::Id(
+        let Some(gen_rust::proto::identity::service::v1::delete_plan_module_request::QueryBy::Id(
             id,
         )) = req.query_by
         else {
@@ -377,7 +377,7 @@ pub struct PlanQuotaService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::PlanQuotaServiceHandlers for PlanQuotaService {
+impl gen_rust::gen::services::PlanQuotaServiceHandlers for PlanQuotaService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -446,7 +446,7 @@ impl admin_api::gen::services::PlanQuotaServiceHandlers for PlanQuotaService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeletePlanQuotaRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(admin_api::proto::identity::service::v1::delete_plan_quota_request::QueryBy::Id(
+        let Some(gen_rust::proto::identity::service::v1::delete_plan_quota_request::QueryBy::Id(
             id,
         )) = req.query_by
         else {

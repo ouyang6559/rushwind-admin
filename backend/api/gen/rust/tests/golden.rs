@@ -9,14 +9,14 @@
 //! * plain (non-optional) scalars emit their default; 64-bit integers emit as
 //!   strings; unset repeated fields emit as [].
 
-use admin_api::proto::dict::service::v1::{Language, ListLanguageResponse};
+use gen_rust::proto::dict::service::v1::{Language, ListLanguageResponse};
 
 #[test]
 fn zero_value_presence_only_message_omits_everything() {
     // Language's every field is `optional` — unset presence fields are
     // omitted, so the zero value serializes to the empty object.
     let bytes = rushwind_http_binding::codec::serialize_response(
-        admin_api::pool(),
+        gen_rust::pool(),
         "dict.service.v1.Language",
         &Language::default(),
     )
@@ -30,7 +30,7 @@ fn zero_value_plain_fields_emit_defaults() {
     // total` — unset repeated emits [], the unset 64-bit scalar emits its
     // default AS A STRING per protojson.
     let bytes = rushwind_http_binding::codec::serialize_response(
-        admin_api::pool(),
+        gen_rust::pool(),
         "dict.service.v1.ListLanguageResponse",
         &ListLanguageResponse::default(),
     )

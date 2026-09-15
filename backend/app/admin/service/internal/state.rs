@@ -86,7 +86,7 @@ pub fn status_error(
     reason: &'static str,
     message: impl Into<String>,
 ) -> rushwind_http_binding::envelope::StatusError {
-    let status = admin_api::tables::error_status("admin.service.v1", reason).unwrap_or(500);
+    let status = gen_rust::tables::error_status("admin.service.v1", reason).unwrap_or(500);
     rushwind_http_binding::envelope::StatusError::new(status, reason, message)
 }
 

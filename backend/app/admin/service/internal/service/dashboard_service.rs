@@ -7,7 +7,7 @@ use std::sync::Arc;
 use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter};
 
 use crate::state::{db_err, AppState, StatusError};
-use admin_api::proto::admin::service::v1::{
+use gen_rust::proto::admin::service::v1::{
     ActionDistributionResponse, DashboardOverviewResponse, DistributionItem, GetLoginTrendRequest,
     LoginTrendResponse, StatusDistributionResponse, TrendPoint,
 };
@@ -18,7 +18,7 @@ pub struct DashboardService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::DashboardServiceHandlers for DashboardService {
+impl gen_rust::gen::services::DashboardServiceHandlers for DashboardService {
     async fn get_overview(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,

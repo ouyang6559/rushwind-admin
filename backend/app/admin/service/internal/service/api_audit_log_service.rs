@@ -6,10 +6,10 @@ use std::sync::Arc;
 use sea_orm::EntityTrait;
 
 use crate::state::{db_err, not_found, AppState, StatusError};
-use admin_api::proto::audit::service::v1::{
+use gen_rust::proto::audit::service::v1::{
     ApiAuditLog, GetApiAuditLogRequest, ListApiAuditLogResponse,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 
 fn log_proto(r: crate::data::audit::sys_api_audit_logs::Model) -> ApiAuditLog {
     ApiAuditLog {
@@ -50,7 +50,7 @@ pub struct ApiAuditLogService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::ApiAuditLogServiceHandlers for ApiAuditLogService {
+impl gen_rust::gen::services::ApiAuditLogServiceHandlers for ApiAuditLogService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -69,7 +69,7 @@ impl admin_api::gen::services::ApiAuditLogServiceHandlers for ApiAuditLogService
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetApiAuditLogRequest,
     ) -> Result<ApiAuditLog, StatusError> {
-        let Some(admin_api::proto::audit::service::v1::get_api_audit_log_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::audit::service::v1::get_api_audit_log_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(crate::state::status_error(

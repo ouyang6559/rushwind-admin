@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::state::{operator_missing, AppState, StatusError};
 use crate::token::{SessionMeta, UserTokenPayload};
-use admin_api::proto::online_session::service::v1::{
+use gen_rust::proto::online_session::service::v1::{
     ForceLogoutSessionRequest, ForceLogoutSessionResponse, ListMyOnlineSessionRequest,
     ListOnlineSessionRequest, ListOnlineSessionResponse, OnlineSession,
     RevokeMyOnlineSessionRequest, RevokeMyOnlineSessionResponse,
@@ -46,7 +46,7 @@ pub struct OnlineSessionService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::OnlineSessionServiceHandlers for OnlineSessionService {
+impl gen_rust::gen::services::OnlineSessionServiceHandlers for OnlineSessionService {
     async fn list_online_session(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,

@@ -14,11 +14,11 @@ use sea_orm::{
 use crate::state::{
     db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
-use admin_api::proto::identity::service::v1::{
+use gen_rust::proto::identity::service::v1::{
     CreateOrgUnitRequest, DeleteOrgUnitRequest, GetOrgUnitRequest, ListOrgUnitResponse, OrgUnit,
     UpdateOrgUnitRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 fn org_type_to_proto(s: &str) -> i32 {
@@ -134,7 +134,7 @@ impl OrgUnitService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::OrgUnitServiceHandlers for OrgUnitService {
+impl gen_rust::gen::services::OrgUnitServiceHandlers for OrgUnitService {
     async fn list(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
@@ -166,7 +166,7 @@ impl admin_api::gen::services::OrgUnitServiceHandlers for OrgUnitService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetOrgUnitRequest,
     ) -> Result<OrgUnit, StatusError> {
-        let Some(admin_api::proto::identity::service::v1::get_org_unit_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::identity::service::v1::get_org_unit_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -303,7 +303,7 @@ impl admin_api::gen::services::OrgUnitServiceHandlers for OrgUnitService {
         req: DeleteOrgUnitRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let Some(admin_api::proto::identity::service::v1::delete_org_unit_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::identity::service::v1::delete_org_unit_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

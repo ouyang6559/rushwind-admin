@@ -38,7 +38,7 @@ use crate::service::{
     UserProfileService, UserService,
 };
 use crate::state::AppState;
-use admin_api::pool;
+use gen_rust::pool;
 use middleware_auth::auth_gate;
 use rushwind_http::{CorsOptions, HttpEdge};
 use rushwind_http_binding::bindgate::bind_run;
@@ -86,7 +86,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     // classifies each of its route bindings.
     let mut router_pub = axum::Router::new();
     let mut router_gate = axum::Router::new();
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_access_key_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_access_key_service(
         router_pub,
         router_gate,
         Arc::new(AccessKeyService {
@@ -94,7 +94,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_admin_portal_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_admin_portal_service(
         router_pub,
         router_gate,
         Arc::new(AdminPortalService {
@@ -102,7 +102,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_api_audit_log_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_api_audit_log_service(
         router_pub,
         router_gate,
         Arc::new(ApiAuditLogService {
@@ -110,7 +110,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_api_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_api_service(
         router_pub,
         router_gate,
         Arc::new(ApiService {
@@ -118,7 +118,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_authentication_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_authentication_service(
         router_pub,
         router_gate,
         Arc::new(AuthenticationService {
@@ -126,7 +126,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_config_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_config_service(
         router_pub,
         router_gate,
         Arc::new(ConfigService {
@@ -134,7 +134,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_dashboard_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_dashboard_service(
         router_pub,
         router_gate,
         Arc::new(DashboardService {
@@ -142,7 +142,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_data_access_audit_log_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_data_access_audit_log_service(
         router_pub,
         router_gate,
         Arc::new(DataAccessAuditLogService {
@@ -150,7 +150,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_dict_entry_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_dict_entry_service(
         router_pub,
         router_gate,
         Arc::new(DictEntryService {
@@ -158,7 +158,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_dict_type_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_dict_type_service(
         router_pub,
         router_gate,
         Arc::new(DictTypeService {
@@ -166,7 +166,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_file_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_file_service(
         router_pub,
         router_gate,
         Arc::new(FileService {
@@ -174,7 +174,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_file_transfer_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_file_transfer_service(
         router_pub,
         router_gate,
         Arc::new(FileTransferService {
@@ -182,7 +182,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_internal_message_category_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_internal_message_category_service(
         router_pub,
         router_gate,
         Arc::new(InternalMessageCategoryService {
@@ -190,7 +190,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_internal_message_recipient_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_internal_message_recipient_service(
         router_pub,
         router_gate,
         Arc::new(InternalMessageRecipientService {
@@ -198,7 +198,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_internal_message_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_internal_message_service(
         router_pub,
         router_gate,
         Arc::new(InternalMessageService {
@@ -206,7 +206,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_language_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_language_service(
         router_pub,
         router_gate,
         Arc::new(LanguageService {
@@ -214,7 +214,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_login_audit_log_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_login_audit_log_service(
         router_pub,
         router_gate,
         Arc::new(LoginAuditLogService {
@@ -222,7 +222,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_login_policy_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_login_policy_service(
         router_pub,
         router_gate,
         Arc::new(LoginPolicyService {
@@ -230,7 +230,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_menu_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_menu_service(
         router_pub,
         router_gate,
         Arc::new(MenuService {
@@ -238,7 +238,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_mfa_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_mfa_service(
         router_pub,
         router_gate,
         Arc::new(MfaService {
@@ -246,7 +246,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_notification_channel_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_notification_channel_service(
         router_pub,
         router_gate,
         Arc::new(NotificationChannelService {
@@ -254,7 +254,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_online_session_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_online_session_service(
         router_pub,
         router_gate,
         Arc::new(OnlineSessionService {
@@ -262,7 +262,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_operation_audit_log_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_operation_audit_log_service(
         router_pub,
         router_gate,
         Arc::new(OperationAuditLogService {
@@ -270,7 +270,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_org_unit_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_org_unit_service(
         router_pub,
         router_gate,
         Arc::new(OrgUnitService {
@@ -278,7 +278,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_permission_audit_log_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_permission_audit_log_service(
         router_pub,
         router_gate,
         Arc::new(PermissionAuditLogService {
@@ -286,7 +286,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_permission_group_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_permission_group_service(
         router_pub,
         router_gate,
         Arc::new(PermissionGroupService {
@@ -294,7 +294,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_permission_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_permission_service(
         router_pub,
         router_gate,
         Arc::new(PermissionService {
@@ -302,7 +302,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_plan_module_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_plan_module_service(
         router_pub,
         router_gate,
         Arc::new(PlanModuleService {
@@ -310,7 +310,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_plan_quota_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_plan_quota_service(
         router_pub,
         router_gate,
         Arc::new(PlanQuotaService {
@@ -318,7 +318,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_plan_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_plan_service(
         router_pub,
         router_gate,
         Arc::new(PlanService {
@@ -326,7 +326,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_policy_evaluation_log_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_policy_evaluation_log_service(
         router_pub,
         router_gate,
         Arc::new(PolicyEvaluationLogService {
@@ -334,7 +334,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_position_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_position_service(
         router_pub,
         router_gate,
         Arc::new(PositionService {
@@ -342,7 +342,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_redis_cache_monitor_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_redis_cache_monitor_service(
         router_pub,
         router_gate,
         Arc::new(RedisCacheMonitorService {
@@ -350,7 +350,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_role_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_role_service(
         router_pub,
         router_gate,
         Arc::new(RoleService {
@@ -358,7 +358,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_script_log_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_script_log_service(
         router_pub,
         router_gate,
         Arc::new(ScriptLogService {
@@ -366,7 +366,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_script_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_script_service(
         router_pub,
         router_gate,
         Arc::new(ScriptService {
@@ -374,7 +374,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_server_monitor_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_server_monitor_service(
         router_pub,
         router_gate,
         Arc::new(ServerMonitorService {
@@ -382,7 +382,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_task_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_task_service(
         router_pub,
         router_gate,
         Arc::new(TaskService {
@@ -390,7 +390,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_tenant_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_tenant_service(
         router_pub,
         router_gate,
         Arc::new(TenantService {
@@ -398,7 +398,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_user_profile_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_user_profile_service(
         router_pub,
         router_gate,
         Arc::new(UserProfileService {
@@ -406,7 +406,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         }),
         &wrap,
     );
-    (router_pub, router_gate) = admin_api::gen::mounts::mount_user_service(
+    (router_pub, router_gate) = gen_rust::gen::mounts::mount_user_service(
         router_pub,
         router_gate,
         Arc::new(UserService {

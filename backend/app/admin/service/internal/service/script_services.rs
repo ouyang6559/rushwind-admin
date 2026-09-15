@@ -8,8 +8,8 @@ use std::sync::Arc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
-use admin_api::proto::pagination::PagingRequest;
-use admin_api::proto::script::service::v1::{
+use gen_rust::proto::pagination::PagingRequest;
+use gen_rust::proto::script::service::v1::{
     CountScriptLogsResponse, CountScriptsResponse, CreateScriptRequest, DeleteScriptRequest,
     GetScriptRequest, ListScriptLogsResponse, ListScriptsResponse, PurgeScriptLogsRequest,
     PurgeScriptLogsResponse, Script, ScriptLog, TestRunScriptRequest, TestRunScriptResponse,
@@ -75,7 +75,7 @@ pub struct ScriptService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::ScriptServiceHandlers for ScriptService {
+impl gen_rust::gen::services::ScriptServiceHandlers for ScriptService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -110,7 +110,7 @@ impl admin_api::gen::services::ScriptServiceHandlers for ScriptService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetScriptRequest,
     ) -> Result<Script, StatusError> {
-        let Some(admin_api::proto::script::service::v1::get_script_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::script::service::v1::get_script_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -223,7 +223,7 @@ impl admin_api::gen::services::ScriptServiceHandlers for ScriptService {
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
         _req: Empty,
-    ) -> Result<admin_api::proto::script::service::v1::ListHookPointsResponse, StatusError> {
+    ) -> Result<gen_rust::proto::script::service::v1::ListHookPointsResponse, StatusError> {
         // The entity-hook registry (script_entity_hooks.go).
         let hook_points = vec![
             "user.before_create",
@@ -238,10 +238,10 @@ impl admin_api::gen::services::ScriptServiceHandlers for ScriptService {
             "notification_channel.after_update",
         ];
         Ok(
-            admin_api::proto::script::service::v1::ListHookPointsResponse {
+            gen_rust::proto::script::service::v1::ListHookPointsResponse {
                 items: hook_points
                     .into_iter()
-                    .map(|name| admin_api::proto::script::service::v1::HookPoint {
+                    .map(|name| gen_rust::proto::script::service::v1::HookPoint {
                         name: name.to_string(),
                         description: String::new(),
                         script_count: 0,
@@ -258,7 +258,7 @@ pub struct ScriptLogService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::ScriptLogServiceHandlers for ScriptLogService {
+impl gen_rust::gen::services::ScriptLogServiceHandlers for ScriptLogService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,

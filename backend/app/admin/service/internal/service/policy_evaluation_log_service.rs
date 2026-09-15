@@ -7,8 +7,8 @@ use std::sync::Arc;
 use sea_orm::EntityTrait;
 
 use crate::state::{db_err, not_found, AppState, StatusError};
-use admin_api::proto::pagination::PagingRequest;
-use admin_api::proto::permission::service::v1::{
+use gen_rust::proto::pagination::PagingRequest;
+use gen_rust::proto::permission::service::v1::{
     GetPolicyEvaluationLogRequest, ListPolicyEvaluationLogResponse, PolicyEvaluationLog,
 };
 
@@ -39,7 +39,7 @@ pub struct PolicyEvaluationLogService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::PolicyEvaluationLogServiceHandlers for PolicyEvaluationLogService {
+impl gen_rust::gen::services::PolicyEvaluationLogServiceHandlers for PolicyEvaluationLogService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -58,7 +58,7 @@ impl admin_api::gen::services::PolicyEvaluationLogServiceHandlers for PolicyEval
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetPolicyEvaluationLogRequest,
     ) -> Result<PolicyEvaluationLog, StatusError> {
-        let Some(admin_api::proto::permission::service::v1::get_policy_evaluation_log_request::QueryBy::Id(id)) = req.query_by else {
+        let Some(gen_rust::proto::permission::service::v1::get_policy_evaluation_log_request::QueryBy::Id(id)) = req.query_by else {
             return Err(crate::state::status_error("BAD_REQUEST", "query_by required"));
         };
         let row = crate::data::audit::sys_policy_evaluation_logs::Entity::find_by_id(id)

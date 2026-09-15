@@ -1,7 +1,7 @@
 //! Corpus guard for the auth-free split.
 //!
 //! The generator classifies every route binding via the auth-free table
-//! (`admin_api::AUTH_FREE`, the Go `AddWhiteList`). This test pins
+//! (`gen_rust::AUTH_FREE`, the Go `AddWhiteList`). This test pins
 //! BOTH directions against the live corpus:
 //!
 //! * every whitelisted pair still exists as a route binding — a dropped
@@ -33,8 +33,8 @@ const EXPECTED: &[(&str, &str)] = &[
 fn auth_free_routes_match_the_go_whitelist() {
     let mut public: BTreeSet<(&str, &str)> = BTreeSet::new();
     let mut public_bindings = 0usize;
-    for route in admin_api::gen::routes::ROUTES {
-        if admin_api::AUTH_FREE
+    for route in gen_rust::gen::routes::ROUTES {
+        if gen_rust::AUTH_FREE
             .iter()
             .any(|(s, m)| *s == route.service_fq && *m == route.method_name)
         {
@@ -61,7 +61,7 @@ fn auth_free_routes_match_the_go_whitelist() {
 /// adds or removes a shadow must land here consciously.
 #[test]
 fn shadowed_routes_match_the_registered_set() {
-    let observed: Vec<(usize, &str, &str)> = admin_api::gen::routes::ROUTES
+    let observed: Vec<(usize, &str, &str)> = gen_rust::gen::routes::ROUTES
         .iter()
         .enumerate()
         .filter(|(_, r)| r.shadowed)

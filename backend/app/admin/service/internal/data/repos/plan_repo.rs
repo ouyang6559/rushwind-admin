@@ -27,7 +27,7 @@ impl<'a> PlanRepo<'a> {
     /// Paged listing over the PagingRequest contract: returns (rows, total).
     pub async fn paged_list(
         &self,
-        req: &admin_api::proto::pagination::PagingRequest,
+        req: &gen_rust::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_plans::Model>, u64), StatusError> {
         use sea_orm::PaginatorTrait;
         let base = sys_plans::Entity::find()
@@ -93,7 +93,7 @@ impl<'a> PlanModuleRepo<'a> {
     /// Paged listing over the PagingRequest contract: returns (rows, total).
     pub async fn paged_list(
         &self,
-        req: &admin_api::proto::pagination::PagingRequest,
+        req: &gen_rust::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_plan_modules::Model>, u64), StatusError> {
         use sea_orm::PaginatorTrait;
         let base = sys_plan_modules::Entity::find()
@@ -149,7 +149,7 @@ impl<'a> PlanQuotaRepo<'a> {
     /// Paged listing over the PagingRequest contract: returns (rows, total).
     pub async fn paged_list(
         &self,
-        req: &admin_api::proto::pagination::PagingRequest,
+        req: &gen_rust::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_plan_quotas::Model>, u64), StatusError> {
         use sea_orm::PaginatorTrait;
         let base = sys_plan_quotas::Entity::find()

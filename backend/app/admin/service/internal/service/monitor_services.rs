@@ -5,10 +5,10 @@
 use std::sync::Arc;
 
 use crate::state::{AppState, StatusError};
-use admin_api::proto::redis_cache::service::v1::{
+use gen_rust::proto::redis_cache::service::v1::{
     GetRedisCacheMonitorRequest, RedisCacheMonitorInfo,
 };
-use admin_api::proto::server_monitor::service::v1::{GetServerMonitorRequest, ServerMonitorInfo};
+use gen_rust::proto::server_monitor::service::v1::{GetServerMonitorRequest, ServerMonitorInfo};
 
 pub struct ServerMonitorService {
     #[allow(dead_code)] // the host-vitals sampler lands with the monitor phase
@@ -16,7 +16,7 @@ pub struct ServerMonitorService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::ServerMonitorServiceHandlers for ServerMonitorService {
+impl gen_rust::gen::services::ServerMonitorServiceHandlers for ServerMonitorService {
     async fn get(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -39,7 +39,7 @@ pub struct RedisCacheMonitorService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::RedisCacheMonitorServiceHandlers for RedisCacheMonitorService {
+impl gen_rust::gen::services::RedisCacheMonitorServiceHandlers for RedisCacheMonitorService {
     async fn get(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -62,19 +62,19 @@ impl admin_api::gen::services::RedisCacheMonitorServiceHandlers for RedisCacheMo
             .unwrap_or(0);
         // The proto surface is sections + db_size + slowlog; the INFO
         // memory lines ride as a parsed section.
-        let entries: Vec<admin_api::proto::redis_cache::service::v1::InfoEntry> = info
+        let entries: Vec<gen_rust::proto::redis_cache::service::v1::InfoEntry> = info
             .lines()
             .filter(|line| line.contains(':') && !line.starts_with('#'))
             .map(|line| {
                 let (k, v) = line.split_once(':').unwrap_or((line, ""));
-                admin_api::proto::redis_cache::service::v1::InfoEntry {
+                gen_rust::proto::redis_cache::service::v1::InfoEntry {
                     key: k.trim().to_string(),
                     value: v.trim().to_string(),
                 }
             })
             .collect();
         Ok(RedisCacheMonitorInfo {
-            sections: vec![admin_api::proto::redis_cache::service::v1::InfoSection {
+            sections: vec![gen_rust::proto::redis_cache::service::v1::InfoSection {
                 name: "memory".into(),
                 entries,
             }],

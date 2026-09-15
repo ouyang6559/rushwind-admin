@@ -15,8 +15,8 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use crate::state::{
     db_err, internal_error, not_found, operator_of, status_error, AppState, StatusError,
 };
-use admin_api::proto::pagination::PagingRequest;
-use admin_api::proto::storage::service::v1::{
+use gen_rust::proto::pagination::PagingRequest;
+use gen_rust::proto::storage::service::v1::{
     CreateFileRequest, DeleteFileRequest, DownloadFileRequest, DownloadFileResponse, File,
     GetFileRequest, ListFileResponse, UpdateFileRequest, UploadFileRequest, UploadFileResponse,
 };
@@ -121,7 +121,7 @@ pub struct FileService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::FileServiceHandlers for FileService {
+impl gen_rust::gen::services::FileServiceHandlers for FileService {
     async fn list(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
@@ -143,7 +143,7 @@ impl admin_api::gen::services::FileServiceHandlers for FileService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetFileRequest,
     ) -> Result<File, StatusError> {
-        let Some(admin_api::proto::storage::service::v1::get_file_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::storage::service::v1::get_file_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -219,7 +219,7 @@ impl admin_api::gen::services::FileServiceHandlers for FileService {
         req: DeleteFileRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let Some(admin_api::proto::storage::service::v1::delete_file_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::storage::service::v1::delete_file_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -260,7 +260,7 @@ impl FileTransferService {
             .as_ref()
             .ok_or_else(|| status_error("BAD_REQUEST", "storage object required"))?;
         let bytes = match &req.source {
-            Some(admin_api::proto::storage::service::v1::upload_file_request::Source::File(
+            Some(gen_rust::proto::storage::service::v1::upload_file_request::Source::File(
                 bytes,
             )) => bytes.clone(),
             _ => {
@@ -340,7 +340,7 @@ impl FileTransferService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::FileTransferServiceHandlers for FileTransferService {
+impl gen_rust::gen::services::FileTransferServiceHandlers for FileTransferService {
     async fn download_file(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -350,13 +350,13 @@ impl admin_api::gen::services::FileTransferServiceHandlers for FileTransferServi
         // direct), or download_url (SSRF-hardened fetch in the reference;
         // only same-origin local mirrors resolve here).
         let row = match &req.selector {
-            Some(admin_api::proto::storage::service::v1::download_file_request::Selector::FileId(id)) => {
+            Some(gen_rust::proto::storage::service::v1::download_file_request::Selector::FileId(id)) => {
                 crate::data::files::Entity::find_by_id(*id)
                     .one(&self.state.db)
                     .await
                     .map_err(db_err)?
             }
-            Some(admin_api::proto::storage::service::v1::download_file_request::Selector::StorageObject(obj)) => {
+            Some(gen_rust::proto::storage::service::v1::download_file_request::Selector::StorageObject(obj)) => {
                 crate::data::files::Entity::find()
                     .filter(
                         Condition::all()
@@ -367,7 +367,7 @@ impl admin_api::gen::services::FileTransferServiceHandlers for FileTransferServi
                     .await
                     .map_err(db_err)?
             }
-            Some(admin_api::proto::storage::service::v1::download_file_request::Selector::DownloadUrl(_)) => {
+            Some(gen_rust::proto::storage::service::v1::download_file_request::Selector::DownloadUrl(_)) => {
                 return Err(status_error("UNIMPLEMENTED", "remote url download not wired"));
             }
             None => None,
@@ -397,7 +397,7 @@ impl admin_api::gen::services::FileTransferServiceHandlers for FileTransferServi
             storage_path: path.clone(),
             updated_at: row.updated_at.and_then(crate::state::naive_to_ts),
             content: Some(
-                admin_api::proto::storage::service::v1::download_file_response::Content::File(
+                gen_rust::proto::storage::service::v1::download_file_response::Content::File(
                     bytes,
                 ),
             ),

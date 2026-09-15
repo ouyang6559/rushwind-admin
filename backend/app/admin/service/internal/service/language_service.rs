@@ -6,11 +6,11 @@ use std::sync::Arc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
-use admin_api::proto::dict::service::v1::{
+use gen_rust::proto::dict::service::v1::{
     BatchCreateLanguagesRequest, CreateLanguageRequest, DeleteLanguageRequest, Language,
     ListLanguageResponse, UpdateLanguageRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 fn language_proto(r: crate::data::sys_languages::Model) -> Language {
@@ -36,7 +36,7 @@ pub struct LanguageService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::LanguageServiceHandlers for LanguageService {
+impl gen_rust::gen::services::LanguageServiceHandlers for LanguageService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -56,11 +56,11 @@ impl admin_api::gen::services::LanguageServiceHandlers for LanguageService {
     async fn get(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
-        req: admin_api::proto::dict::service::v1::GetLanguageRequest,
+        req: gen_rust::proto::dict::service::v1::GetLanguageRequest,
     ) -> Result<Language, StatusError> {
         let id = match req.query_by {
-            Some(admin_api::proto::dict::service::v1::get_language_request::QueryBy::Id(id)) => id,
-            Some(admin_api::proto::dict::service::v1::get_language_request::QueryBy::Code(
+            Some(gen_rust::proto::dict::service::v1::get_language_request::QueryBy::Id(id)) => id,
+            Some(gen_rust::proto::dict::service::v1::get_language_request::QueryBy::Code(
                 code,
             )) => crate::data::sys_languages::Entity::find()
                 .filter(crate::data::sys_languages::Column::LanguageCode.eq(code))
@@ -171,7 +171,7 @@ impl admin_api::gen::services::LanguageServiceHandlers for LanguageService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeleteLanguageRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(admin_api::proto::dict::service::v1::delete_language_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::dict::service::v1::delete_language_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

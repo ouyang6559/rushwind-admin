@@ -10,8 +10,8 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrde
 use crate::state::{
     db_err, internal_error, not_found, operator_of, status_error, AppState, StatusError,
 };
-use admin_api::proto::pagination::PagingRequest;
-use admin_api::proto::permission::service::v1::{
+use gen_rust::proto::pagination::PagingRequest;
+use gen_rust::proto::permission::service::v1::{
     Api, CreateApiRequest, DeleteApiRequest, GetApiRequest, ListApiResponse, UpdateApiRequest,
 };
 use pbjson_types::Empty;
@@ -97,7 +97,7 @@ pub struct ApiService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::ApiServiceHandlers for ApiService {
+impl gen_rust::gen::services::ApiServiceHandlers for ApiService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -117,7 +117,7 @@ impl admin_api::gen::services::ApiServiceHandlers for ApiService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetApiRequest,
     ) -> Result<Api, StatusError> {
-        let Some(admin_api::proto::permission::service::v1::get_api_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::permission::service::v1::get_api_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -219,7 +219,7 @@ impl admin_api::gen::services::ApiServiceHandlers for ApiService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeleteApiRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(admin_api::proto::permission::service::v1::delete_api_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::permission::service::v1::delete_api_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

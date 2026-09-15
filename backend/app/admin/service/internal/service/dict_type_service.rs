@@ -11,11 +11,11 @@ use crate::data::scope::Viewer;
 use crate::state::{
     db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
-use admin_api::proto::dict::service::v1::{
+use gen_rust::proto::dict::service::v1::{
     CreateDictTypeRequest, DeleteDictTypeRequest, DictType, GetDictTypeRequest,
     ListDictTypeResponse, UpdateDictTypeRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 fn dict_type_proto(r: crate::data::sys_dict_types::Model) -> DictType {
@@ -41,7 +41,7 @@ pub struct DictTypeService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::DictTypeServiceHandlers for DictTypeService {
+impl gen_rust::gen::services::DictTypeServiceHandlers for DictTypeService {
     async fn list(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
@@ -63,8 +63,8 @@ impl admin_api::gen::services::DictTypeServiceHandlers for DictTypeService {
     ) -> Result<DictType, StatusError> {
         let tenant = tenant_of(&ctx);
         let id = match req.query_by {
-            Some(admin_api::proto::dict::service::v1::get_dict_type_request::QueryBy::Id(id)) => id,
-            Some(admin_api::proto::dict::service::v1::get_dict_type_request::QueryBy::Code(
+            Some(gen_rust::proto::dict::service::v1::get_dict_type_request::QueryBy::Id(id)) => id,
+            Some(gen_rust::proto::dict::service::v1::get_dict_type_request::QueryBy::Code(
                 code,
             )) => crate::data::sys_dict_types::Entity::find()
                 .filter(

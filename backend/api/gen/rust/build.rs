@@ -73,7 +73,8 @@ fn is_well_known(name: &str) -> bool {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let backend_root = manifest_dir.join("../..");
+    // crates sits at backend/api/gen/rust — three levels up is backend/.
+    let backend_root = manifest_dir.join("../../..");
     let proto_root = backend_root.join("api/protos");
     let third_party_root = backend_root.join("api/third_party");
 
@@ -190,7 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let src = match rushwind_gen_http::generate_from_bytes(&annotated, &cfg) {
         Ok(src) => src,
-        Err(e) => panic!("admin-api code generation failed: {e}"),
+        Err(e) => panic!("gen-rust code generation failed: {e}"),
     };
     fs::write(out_dir.join("admin_gen.rs"), src)?;
 

@@ -36,7 +36,7 @@ impl<'a> AccessKeyRepo<'a> {
     /// Paged listing over the PagingRequest contract: returns (rows, total).
     pub async fn paged_list(
         &self,
-        req: &admin_api::proto::pagination::PagingRequest,
+        req: &gen_rust::proto::pagination::PagingRequest,
     ) -> Result<(Vec<entity::Model>, u64), StatusError> {
         use sea_orm::PaginatorTrait;
         let base = entity::Entity::find().filter(self.condition());

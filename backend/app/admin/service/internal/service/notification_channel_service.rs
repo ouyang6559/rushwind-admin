@@ -8,12 +8,12 @@ use std::sync::Arc;
 use sea_orm::{ActiveModelTrait, EntityTrait, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
-use admin_api::proto::notification_channel::service::v1::{
+use gen_rust::proto::notification_channel::service::v1::{
     CreateNotificationChannelRequest, DeleteNotificationChannelRequest,
     GetNotificationChannelRequest, ListNotificationChannelResponse, NotificationChannel,
     SendTestEmailRequest, UpdateNotificationChannelRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 fn channel_proto(r: crate::data::sys_notification_channels::Model) -> NotificationChannel {
@@ -52,7 +52,7 @@ pub struct NotificationChannelService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::NotificationChannelServiceHandlers for NotificationChannelService {
+impl gen_rust::gen::services::NotificationChannelServiceHandlers for NotificationChannelService {
     async fn list_notification_channel(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,

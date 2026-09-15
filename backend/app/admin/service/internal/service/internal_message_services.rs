@@ -14,14 +14,14 @@ use sea_orm::{
 use crate::state::{
     db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
-use admin_api::proto::internal_message::service::v1::{
+use gen_rust::proto::internal_message::service::v1::{
     DeleteNotificationFromInboxRequest, GetInternalMessageCategoryRequest,
     GetInternalMessageRequest, InternalMessage, InternalMessageCategory, InternalMessageRecipient,
     ListInternalMessageCategoryResponse, ListInternalMessageResponse, ListUserInboxResponse,
     MarkNotificationAsReadRequest, MarkNotificationsStatusRequest, RevokeMessageRequest,
     SendMessageRequest, SendMessageResponse, UpdateInternalMessageRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 fn message_status_to_proto(s: &str) -> i32 {
@@ -125,7 +125,7 @@ impl InternalMessageService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::InternalMessageServiceHandlers for InternalMessageService {
+impl gen_rust::gen::services::InternalMessageServiceHandlers for InternalMessageService {
     async fn list_message(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
@@ -147,7 +147,7 @@ impl admin_api::gen::services::InternalMessageServiceHandlers for InternalMessag
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetInternalMessageRequest,
     ) -> Result<InternalMessage, StatusError> {
-        let Some(admin_api::proto::internal_message::service::v1::get_internal_message_request::QueryBy::Id(id)) = req.query_by else {
+        let Some(gen_rust::proto::internal_message::service::v1::get_internal_message_request::QueryBy::Id(id)) = req.query_by else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
         };
         let row = crate::data::internal_messages::Entity::find_by_id(id)
@@ -188,10 +188,10 @@ impl admin_api::gen::services::InternalMessageServiceHandlers for InternalMessag
     async fn delete_message(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
-        req: admin_api::proto::internal_message::service::v1::DeleteInternalMessageRequest,
+        req: gen_rust::proto::internal_message::service::v1::DeleteInternalMessageRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let Some(admin_api::proto::internal_message::service::v1::delete_internal_message_request::QueryBy::Id(id)) = req.query_by else {
+        let Some(gen_rust::proto::internal_message::service::v1::delete_internal_message_request::QueryBy::Id(id)) = req.query_by else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
         };
         let row = crate::data::internal_messages::Entity::find_by_id(id)
@@ -321,7 +321,7 @@ pub struct InternalMessageCategoryService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::InternalMessageCategoryServiceHandlers
+impl gen_rust::gen::services::InternalMessageCategoryServiceHandlers
     for InternalMessageCategoryService
 {
     async fn list(
@@ -355,7 +355,7 @@ impl admin_api::gen::services::InternalMessageCategoryServiceHandlers
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetInternalMessageCategoryRequest,
     ) -> Result<InternalMessageCategory, StatusError> {
-        let Some(admin_api::proto::internal_message::service::v1::get_internal_message_category_request::QueryBy::Id(id)) = req.query_by else {
+        let Some(gen_rust::proto::internal_message::service::v1::get_internal_message_category_request::QueryBy::Id(id)) = req.query_by else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
         };
         let row = crate::data::internal_message_categories::Entity::find_by_id(id)
@@ -369,7 +369,7 @@ impl admin_api::gen::services::InternalMessageCategoryServiceHandlers
     async fn create(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
-        req: admin_api::proto::internal_message::service::v1::CreateInternalMessageCategoryRequest,
+        req: gen_rust::proto::internal_message::service::v1::CreateInternalMessageCategoryRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
         let data = req
@@ -396,7 +396,7 @@ impl admin_api::gen::services::InternalMessageCategoryServiceHandlers
     async fn update(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
-        req: admin_api::proto::internal_message::service::v1::UpdateInternalMessageCategoryRequest,
+        req: gen_rust::proto::internal_message::service::v1::UpdateInternalMessageCategoryRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
         let row = crate::data::internal_message_categories::Entity::find_by_id(req.id)
@@ -431,9 +431,9 @@ impl admin_api::gen::services::InternalMessageCategoryServiceHandlers
     async fn delete(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
-        req: admin_api::proto::internal_message::service::v1::DeleteInternalMessageCategoryRequest,
+        req: gen_rust::proto::internal_message::service::v1::DeleteInternalMessageCategoryRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(admin_api::proto::internal_message::service::v1::delete_internal_message_category_request::QueryBy::Id(id)) = req.query_by else {
+        let Some(gen_rust::proto::internal_message::service::v1::delete_internal_message_category_request::QueryBy::Id(id)) = req.query_by else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
         };
         crate::data::internal_message_categories::Entity::delete_by_id(id)
@@ -449,7 +449,7 @@ pub struct InternalMessageRecipientService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::InternalMessageRecipientServiceHandlers
+impl gen_rust::gen::services::InternalMessageRecipientServiceHandlers
     for InternalMessageRecipientService
 {
     async fn list_user_inbox(

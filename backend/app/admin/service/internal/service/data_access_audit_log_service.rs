@@ -6,10 +6,10 @@ use std::sync::Arc;
 use sea_orm::EntityTrait;
 
 use crate::state::{db_err, not_found, AppState, StatusError};
-use admin_api::proto::audit::service::v1::{
+use gen_rust::proto::audit::service::v1::{
     DataAccessAuditLog, GetDataAccessAuditLogRequest, ListDataAccessAuditLogResponse,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 
 fn log_proto(r: crate::data::audit::sys_data_access_audit_logs::Model) -> DataAccessAuditLog {
     DataAccessAuditLog {
@@ -67,7 +67,7 @@ pub struct DataAccessAuditLogService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::DataAccessAuditLogServiceHandlers for DataAccessAuditLogService {
+impl gen_rust::gen::services::DataAccessAuditLogServiceHandlers for DataAccessAuditLogService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -87,7 +87,7 @@ impl admin_api::gen::services::DataAccessAuditLogServiceHandlers for DataAccessA
         req: GetDataAccessAuditLogRequest,
     ) -> Result<DataAccessAuditLog, StatusError> {
         let Some(
-            admin_api::proto::audit::service::v1::get_data_access_audit_log_request::QueryBy::Id(
+            gen_rust::proto::audit::service::v1::get_data_access_audit_log_request::QueryBy::Id(
                 id,
             ),
         ) = req.query_by

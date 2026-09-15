@@ -7,11 +7,11 @@ use std::sync::Arc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
-use admin_api::proto::config::service::v1::{
+use gen_rust::proto::config::service::v1::{
     Config, CreateConfigRequest, DeleteConfigRequest, GetConfigRequest, ListConfigResponse,
     UpdateConfigRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 fn value_type_to_str(v: i32) -> Option<String> {
@@ -54,7 +54,7 @@ pub struct ConfigService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::ConfigServiceHandlers for ConfigService {
+impl gen_rust::gen::services::ConfigServiceHandlers for ConfigService {
     async fn list(
         &self,
         _ctx: rushwind_http_binding::ctx::RequestContext,
@@ -76,7 +76,7 @@ impl admin_api::gen::services::ConfigServiceHandlers for ConfigService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetConfigRequest,
     ) -> Result<Config, StatusError> {
-        let Some(admin_api::proto::config::service::v1::get_config_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::config::service::v1::get_config_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -184,7 +184,7 @@ impl admin_api::gen::services::ConfigServiceHandlers for ConfigService {
         req: DeleteConfigRequest,
     ) -> Result<Empty, StatusError> {
         let _ = operator_of(&ctx)?;
-        let Some(admin_api::proto::config::service::v1::delete_config_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::config::service::v1::delete_config_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

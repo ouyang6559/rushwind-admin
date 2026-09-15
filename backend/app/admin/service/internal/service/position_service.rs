@@ -7,11 +7,11 @@ use std::sync::Arc;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
-use admin_api::proto::identity::service::v1::{
+use gen_rust::proto::identity::service::v1::{
     CreatePositionRequest, DeletePositionRequest, GetPositionRequest, ListPositionResponse,
     Position, UpdatePositionRequest,
 };
-use admin_api::proto::pagination::PagingRequest;
+use gen_rust::proto::pagination::PagingRequest;
 use pbjson_types::Empty;
 
 fn position_proto(r: crate::data::sys_positions::Model) -> Position {
@@ -58,7 +58,7 @@ pub struct PositionService {
 }
 
 #[async_trait::async_trait]
-impl admin_api::gen::services::PositionServiceHandlers for PositionService {
+impl gen_rust::gen::services::PositionServiceHandlers for PositionService {
     async fn list(
         &self,
         ctx: rushwind_http_binding::ctx::RequestContext,
@@ -80,7 +80,7 @@ impl admin_api::gen::services::PositionServiceHandlers for PositionService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetPositionRequest,
     ) -> Result<Position, StatusError> {
-        let Some(admin_api::proto::identity::service::v1::get_position_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::identity::service::v1::get_position_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));
@@ -180,7 +180,7 @@ impl admin_api::gen::services::PositionServiceHandlers for PositionService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeletePositionRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(admin_api::proto::identity::service::v1::delete_position_request::QueryBy::Id(id)) =
+        let Some(gen_rust::proto::identity::service::v1::delete_position_request::QueryBy::Id(id)) =
             req.query_by
         else {
             return Err(status_error("BAD_REQUEST", "query_by required"));

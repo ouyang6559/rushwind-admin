@@ -38,7 +38,7 @@ impl<'a> ScriptRepo<'a> {
     /// Paged listing over the PagingRequest contract: returns (rows, total).
     pub async fn paged_list(
         &self,
-        req: &admin_api::proto::pagination::PagingRequest,
+        req: &gen_rust::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_scripts::Model>, u64), StatusError> {
         use sea_orm::PaginatorTrait;
         let base = sys_scripts::Entity::find().order_by_asc(sys_scripts::Column::Id);
@@ -77,7 +77,7 @@ impl<'a> ScriptLogRepo<'a> {
     /// Paged listing, newest first: returns (rows, total).
     pub async fn paged_list(
         &self,
-        req: &admin_api::proto::pagination::PagingRequest,
+        req: &gen_rust::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_script_logs::Model>, u64), StatusError> {
         use sea_orm::PaginatorTrait;
         let base =

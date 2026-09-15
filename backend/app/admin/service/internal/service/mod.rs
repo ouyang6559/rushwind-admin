@@ -1,6 +1,6 @@
 //! The service layer — one module per proto service, each implementing
 //! its generated Handlers trait against the shared [`crate::state::AppState`]
-//! (the reference internal/service/*).
+
 
 pub mod access_key_service;
 pub mod admin_portal_service;

@@ -115,7 +115,7 @@ pub fn sweep() -> Vec<Case> {
             .iter()
             .any(|(s, m)| *s == spec.service_fq && *m == spec.method_name);
         let (class, kind) = if spec.shadowed {
-            // The gorilla-shadow set: the reference's first-match mux routes
+            // The shadow set: the go stack's first-match mux routes
             // these paths to the earlier pattern route, whose path-variable
             // bind is malformed for the literal segment — the pre/post-auth
             // ordering divergence the exemption set registers.

@@ -1,4 +1,4 @@
-//! PositionRepo — the port of `internal/data/position_repo.go`: tenant-scoped queries with
+//! PositionRepo — tenant-scoped queries with
 //! all predicates owned here (never ad-hoc in services).
 
 use sea_orm::sea_query::Condition;

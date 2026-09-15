@@ -1,4 +1,4 @@
-//! Pure policy matchers — the ports of `data/login_policy_checker.go`
+//! Pure policy matchers — login-policy
 //! helpers and the password-complexity classifier.
 
 /// `matchIPValue`: exact IP or CIDR range (v4).

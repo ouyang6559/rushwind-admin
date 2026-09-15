@@ -1,12 +1,11 @@
-//! The SSE notification server — the port of the reference
-//! `internal/server/sse_server.go` + `InternalMessageService.HandleAuthorize`.
+//! The SSE notification server — //! `internal/server/module` + `InternalMessageService.HandleAuthorize`.
 //!
 //! * token from `Authorization: Bearer`, `X-Token`, or `?token=`
-//!   (kratos-transport sse/auth.go:18-31);
+//!   (kratos-transport sse/module:18-31);
 //! * access-token validation rides the same gate primitives: signature +
 //!   expiry via the engine, Redis whitelist/blacklist via the store;
 //! * `?stream=` must equal the token's userId (anti cross-user
-//!   subscription, internal_message_service.go:146-158);
+//!   subscription, service:146-158);
 //! * events: `notification`, id = GUIDv4, data = the recipient protojson;
 //!   stream id = userId — all of a user's devices share one stream.
 

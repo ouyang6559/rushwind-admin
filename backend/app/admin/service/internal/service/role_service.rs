@@ -1,4 +1,4 @@
-//! RoleService — the port of the reference internal/service/role_service.go:
+//! RoleService — service layer:
 //! role CRUD with permission / org-unit / field-permission bindings; the
 //! template (tenant:manager) role is copied when a tenant is provisioned
 //! (TenantService.WithAdmin).

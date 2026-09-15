@@ -1,5 +1,5 @@
 //! ApiAuditLogService — List/Get over `sys_api_audit_logs`
-//! (the reference api_audit_log_service.go).
+//! .
 
 use std::sync::Arc;
 

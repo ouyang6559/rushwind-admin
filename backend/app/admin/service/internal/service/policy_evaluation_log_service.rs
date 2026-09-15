@@ -1,6 +1,6 @@
 //! PolicyEvaluationLogService — List/Get over
-//! `sys_policy_evaluation_logs` (the reference
-//! policy_evaluation_log_service.go; lives in the permission module).
+//! `sys_policy_evaluation_logs` (
+//! module; lives in the permission module).
 
 use std::sync::Arc;
 

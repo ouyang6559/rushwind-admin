@@ -1,5 +1,4 @@
-//! Token issuance + the Redis session/token cache — the port of
-//! `internal/data/authenticator.go` + `internal/data/user_token_cache.go`.
+//! Token issuance + the Redis session/token cache.
 
 use redis::aio::ConnectionManager;
 use redis::AsyncCommands;
@@ -9,7 +8,7 @@ use serde_json::{json, Map, Value};
 pub const CLIENT_TYPE_ADMIN: u32 = 0;
 
 /// UserTokenPayload — the typed view over the claims bag
-/// (pkg/jwt/user_token_payload.go).
+
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct UserTokenPayload {
     pub username: String,
@@ -119,7 +118,7 @@ impl UserTokenPayload {
     }
 
     /// The refresh-claim bag: uid + jti + iat + exp only
-    /// (refresh_token_payload.go).
+    
     pub fn to_refresh_claims(&self, exp_unix: i64) -> Map<String, Value> {
         Map::from_iter([
             ("uid".to_string(), json!(self.user_id)),
@@ -136,7 +135,7 @@ pub fn new_jwt_id() -> String {
 }
 
 /// The Redis session/token cache. Key shapes verbatim from
-/// user_token_cache.go.
+
 #[derive(Clone)]
 pub struct TokenStore {
     redis: ConnectionManager,
@@ -416,7 +415,7 @@ impl TokenStore {
     }
 
     /// RevokeUserTokenAllClientTypes — the REST surface has admin only,
-    /// but the reference sweeps every client type; mirror for admin.
+    /// Client-type sweeping mirrors the all-client-types revoke.
     /// Wired with the online-session service (storage phase).
     #[allow(dead_code)]
     pub async fn revoke_user_token_all_client_types(&self, uid: u32) {

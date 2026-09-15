@@ -1,5 +1,4 @@
-//! OnlineSessionService — the port of the reference
-//! internal/service/online_session_service.go: the Redis `us:*` session
+//! OnlineSessionService — //! internal/service/service: the Redis `us:*` session
 //! catalog (admin listing with keyword filter, force logout, my-session
 //! list/revoke).
 

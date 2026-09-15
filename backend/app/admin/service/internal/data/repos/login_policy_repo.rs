@@ -1,4 +1,4 @@
-//! LoginPolicyRepo — the port of `internal/data/login_policy_repo.go`: tenant-scoped queries with
+//! LoginPolicyRepo — tenant-scoped queries with
 //! all predicates owned here (never ad-hoc in services).
 
 use sea_orm::sea_query::Condition;

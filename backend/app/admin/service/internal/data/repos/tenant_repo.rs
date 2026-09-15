@@ -1,6 +1,6 @@
-//! TenantRepo — the port of `internal/data/tenant_repo.go`: tenants are
+//! TenantRepo — tenants are
 //! platform-global (no tenant column); the exists gate is code OR name
-//! (tenant_repo.go:325-350); usage counts ride the tenant-scoped tables.
+//! ; usage counts ride the tenant-scoped tables.
 
 use sea_orm::sea_query::Condition;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter};

@@ -1,5 +1,5 @@
 //! LoginAuditLogService — List/Get over `sys_login_audit_logs`
-//! (the reference login_audit_log_service.go).
+//! .
 
 use std::sync::Arc;
 

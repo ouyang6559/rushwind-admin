@@ -1,4 +1,4 @@
-//! UserProfileService — the `/me` surface (user_profile_service.go):
+//! UserProfileService — the `/me` surface (module):
 //! own-user fetch/update, password change (old verify + history +
 //! complexity + full token revocation), avatar bind (data-URL storage in
 //! the same avatar column), contact bind/verify stubs.
@@ -213,7 +213,7 @@ impl UserProfileServiceHandlers for UserProfileService {
     ) -> Result<UploadAvatarResponse, crate::state::StatusError> {
         let payload = operator(&ctx)?;
         // Data-URL storage in the avatar column: self-contained without an
-        // object store. (The reference uploads to MinIO and stores the link.)
+        // object store. (The uploads to MinIO and stores the link.)
         let data_url = match &req.source {
             Some(
                 gen_rust::proto::identity::service::v1::upload_avatar_request::Source::ImageBase64(
@@ -306,7 +306,7 @@ impl UserProfileServiceHandlers for UserProfileService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         _req: VerifyContactRequest,
     ) -> Result<Empty, crate::state::StatusError> {
-        // No SMS/email gateway is wired; the reference without providers
+        // No SMS/email gateway is wired;
         // treats this as unverified-but-accepted.
         let _ = operator(&ctx)?;
         Ok(Empty {})

@@ -1,5 +1,5 @@
 //! DataAccessAuditLogService — List/Get over `sys_data_access_audit_logs`
-//! (the reference data_access_audit_log_service.go).
+//! .
 
 use std::sync::Arc;
 

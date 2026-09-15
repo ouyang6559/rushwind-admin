@@ -1,9 +1,8 @@
-//! FileService and FileTransferService — the ports of the reference
-//! file_service.go / file_transfer_service.go. File metadata rides
+//! FileService and FileTransferService — //! module / module. File metadata rides
 //! `files`; the physical object store is MinIO (S3) when `oss.yaml` is
 //! configured, else the object bytes land on the local data directory
 //! (`./data/files`) with identical metadata semantics. Upload enforces
-//! the reference rules: ≤50 MiB, content-sniffed MIME whitelist,
+//! rules: ≤50 MiB, content-sniffed MIME whitelist,
 //! `bucket = images|videos|audios|docs|files` by type, object name
 //! `dir/uuid.ext`, sha256 content hash, guid v7.
 
@@ -22,7 +21,7 @@ use gen_rust::proto::storage::service::v1::{
 };
 use pbjson_types::Empty;
 
-/// oss.MaxUploadSize (pkg/oss/constants.go).
+/// oss.MaxUploadSize (pkg/oss/module).
 const MAX_UPLOAD_SIZE: usize = 50 * 1024 * 1024;
 
 fn provider_to_proto(s: &str) -> i32 {
@@ -68,7 +67,7 @@ fn human_size(bytes: u64) -> String {
     format!("{size:.2}{}", units[unit])
 }
 
-/// The MIME whitelist (pkg/oss/constants.go:19-44): prefixes plus exact
+/// The MIME whitelist (pkg/oss/module:19-44): prefixes plus exact
 /// doc types.
 fn mime_allowed(mime: &str) -> bool {
     for prefix in ["image/", "video/", "audio/"] {
@@ -288,7 +287,7 @@ impl FileTransferService {
             .clone()
             .filter(|d| !d.is_empty() && !d.starts_with('/') && !d.contains(".."))
             .unwrap_or_else(|| "uploads".into());
-        // Content hash (sha256) — the reference dedup/fingerprint.
+        // Content hash (sha256) — the dedup/fingerprint.
         let hash = crate::crypto::sha256_hex(&bytes);
         let ext = req
             .source_file_name
@@ -347,7 +346,7 @@ impl gen_rust::gen::services::FileTransferServiceHandlers for FileTransferServic
         req: DownloadFileRequest,
     ) -> Result<DownloadFileResponse, StatusError> {
         // Selector: file_id (direct record), storage_object (bucket+key
-        // direct), or download_url (SSRF-hardened fetch in the reference;
+        // download_url: local mirror resolution only;
         // only same-origin local mirrors resolve here).
         let row = match &req.selector {
             Some(gen_rust::proto::storage::service::v1::download_file_request::Selector::FileId(id)) => {

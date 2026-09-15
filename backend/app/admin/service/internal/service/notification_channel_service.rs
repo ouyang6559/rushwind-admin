@@ -1,5 +1,4 @@
-//! NotificationChannelService — the port of the reference
-//! notification_channel_service.go: SMTP/webhook channel CRUD plus
+//! NotificationChannelService — //! service: SMTP/webhook channel CRUD plus
 //! SendTestEmail (delivery lands with the mailer phase; the request
 //! validates the channel and answers per contract).
 

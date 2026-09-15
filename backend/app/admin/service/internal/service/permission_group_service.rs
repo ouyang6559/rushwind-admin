@@ -1,5 +1,4 @@
-//! PermissionGroupService — the port of the reference
-//! internal/service/permission_group_service.go: permission group CRUD.
+//! PermissionGroupService — //! internal/service/service: permission group CRUD.
 
 use std::sync::Arc;
 

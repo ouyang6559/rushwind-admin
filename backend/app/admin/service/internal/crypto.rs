@@ -1,4 +1,4 @@
-//! Credential crypto — the reference's login/credential primitives:
+//! Credential crypto primitives:
 //! the AES-128-CBC front-end password layer (go-utils/crypto, key
 //! `f51d66a73d8a0927`, IV = the key itself, PKCS#7), bcrypt hashing
 //! (default cost 10), SHA-256 (access-key secrets), AES-256-GCM (MFA
@@ -12,9 +12,8 @@ type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 /// go-utils/crypto DefaultAESKey — 16 bytes, also reused as the IV.
 pub const DEFAULT_AES_KEY: &[u8; 16] = b"f51d66a73d8a0927";
 
-/// The AES-256-GCM key for `enc:` secrets (MFA factors): the reference
-/// derives it from env `GOWIND_CRYPTO_KEY`; unset ⇒ factors are stored
-/// in plaintext. We mirror: the same env, unset ⇒ plaintext.
+/// The AES-256-GCM key for `enc:` secrets (MFA factors): derived from
+/// env `GOWIND_CRYPTO_KEY`; unset ⇒ factors are stored in plaintext.
 pub fn crypto_key() -> Option<[u8; 32]> {
     let raw = std::env::var("GOWIND_CRYPTO_KEY").ok()?;
     let mut key = [0u8; 32];
@@ -46,7 +45,7 @@ pub fn decrypt_aes_cbc(ciphertext: &[u8]) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
-/// bcrypt hash at the reference's default cost.
+/// bcrypt hash at default cost.
 pub fn hash_password(password: &str) -> Result<String, String> {
     bcrypt::hash(password, bcrypt::DEFAULT_COST).map_err(|e| format!("bcrypt: {e}"))
 }
@@ -56,8 +55,8 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
     bcrypt::verify(password, hash).unwrap_or(false)
 }
 
-/// The timing-equalizer dummy hash the reference verifies on the
-/// user-not-found paths (user_credential_repo.go).
+/// The timing-equalizer dummy hash verifies on the
+/// user-not-found paths .
 pub const DUMMY_PASSWORD_HASH: &str =
     "$2a$10$1sbpKmhQDpXLHnDnEQ1nLe3oOnYyP2bUJyqHcX2T0Fq1qfyoXOrPm";
 

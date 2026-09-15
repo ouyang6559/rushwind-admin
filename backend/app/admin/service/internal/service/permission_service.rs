@@ -1,5 +1,4 @@
-//! PermissionService — the port of the reference
-//! internal/service/permission_service.go: permission CRUD plus
+//! PermissionService — //! internal/service/service: permission CRUD plus
 //! SyncPermissions, the menu→permission rebuild (compose full menu
 //! paths, convert to resource:action codes, CATALOG menus become
 //! groups, enabled apis attach by converted path codes), then role
@@ -78,7 +77,7 @@ fn singularize(word: &str) -> String {
 }
 
 /// The BUTTON menu title→action keyword rule
-/// (utils/converter/menu.go:143-240).
+/// (utils/converter/module:143-240).
 fn button_action(title: &str) -> &'static str {
     let t = title.to_lowercase();
     for (keyword, action) in [

@@ -1,23 +1,21 @@
-//! The REST server assembly — the port of the reference
-//! `internal/server/rest_server.go`: mounts the full route surface with
+//! The REST server assembly — //! `internal/server/module`: mounts the full route surface with
 //! null placeholder services, splits the auth-free public subtree from
-//! the gated one (the reference `AddWhiteList` set), composes the
+//! the gated one (`AddWhiteList` set), composes the
 //! per-route layer stack, merges the two, and applies the HTTP edge.
 //!
 //! Per-route layer composition (the `wrap` closure below): the framework
 //! bind layer — body and query binding — outermost on EVERY route, and
 //! the auth gate (pkg/middleware-auth) composed INSIDE it on gated routes
-//! only. That order reproduces the reference's: its generated handlers
-//! run `ctx.Bind`/`ctx.BindQuery` before `ctx.Middleware` executes the
-//! auth chain, so codec/binding failures answer 400 ahead of any 401.
+//! only. That order is the wire contract: codec/binding failures answer
+//! 400 ahead of any 401.
 //!
-//! The authorization engine the reference wires here too lands with the
+//! The authorization engine wires here too lands with the
 //! storage phase; until then the gate is the protected subtree's only
 //! defense.
 //!
 //! The CORS policy and request budget are mirrored verbatim from the
 //! reference server.yaml `rest` block, through the gorilla-compatible
-//! CORS layer (see rushwind_http::cors_compat — the reference wires
+//! CORS layer (see rushwind_http::cors_compat — wires
 //! gorilla/handlers there, whose emission rules tower-http does not
 //! reproduce).
 
@@ -44,13 +42,13 @@ use rushwind_http::{CorsOptions, HttpEdge};
 use rushwind_http_binding::bindgate::bind_run;
 use rushwind_http_binding::wire::RouteWire;
 
-/// The reference deployment's registered codec subtypes — the packages
+/// The deployment's registered codec subtypes — the packages
 /// its binary imports (the compatibility spec §2.1 register).
 const REGISTERED_SUBTYPES: &[&str] = &["json", "proto", "x-www-form-urlencoded"];
 
 /// Builds the mounted router. `state` carries the verification engine
 /// and the server-side session store; the assembly order mirrors
-/// rest_server.go.
+/// module.
 pub fn build_router(state: Arc<AppState>) -> axum::Router {
     let descriptor_pool = pool();
     let authenticator = Arc::clone(&state.authenticator);
@@ -416,7 +414,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     );
     let app = router_pub.merge(router_gate);
 
-    // The audit-write layer (the reference applogging.Server wrapper):
+    // The audit-write layer:
     // post-handler persistence into the audit tables, outermost so it
     // sees final status codes.
     let app = app.layer(axum::middleware::from_fn_with_state(
@@ -424,7 +422,7 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         crate::audit::layer,
     ));
 
-    // The reference's CORS policy and request budget, mirrored verbatim
+    // The CORS policy and request budget, mirrored verbatim
     // from server.yaml's rest block: credentialed responses (the
     // refresh-token cookie), the six methods, the six headers, the three
     // frontend domains plus the local dev ports.

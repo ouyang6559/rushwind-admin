@@ -1,4 +1,4 @@
-//! ScriptRepo / ScriptLogRepo — the ports of the reference script repos:
+//! ScriptRepo / ScriptLogRepo — script repos:
 //! enabled-script loading and the log purge (before-timestamp or all).
 
 use sea_orm::{

@@ -13,7 +13,7 @@
 
 use std::collections::BTreeSet;
 
-/// The expected public pairs — the Go rest_server.go `AddWhiteList`
+/// The expected public pairs — the deployment's public whitelist
 /// registrations, verbatim.
 const EXPECTED: &[(&str, &str)] = &[
     ("admin.service.v1.AuthenticationService", "Login"),
@@ -55,7 +55,7 @@ fn auth_free_routes_match_the_go_whitelist() {
     );
 }
 
-/// The gorilla-shadow set: bindings the reference's first-match mux can
+/// The shadow set: bindings a first-match mux absorbs
 /// never reach (an earlier same-method pattern route absorbs their
 /// paths), so the mounts skip them. Pinned hard — contract drift that
 /// adds or removes a shadow must land here consciously.

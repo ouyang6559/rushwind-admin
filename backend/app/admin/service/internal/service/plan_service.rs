@@ -1,5 +1,4 @@
-//! Plan / PlanModule / PlanQuota services — the ports of the reference
-//! plan_service.go, plan_module_service.go and plan_quota_service.go:
+//! Plan / PlanModule / PlanQuota services — //! module, module and service:
 //! subscription-plan CRUD with their module-whitelist and quota children.
 
 use std::sync::Arc;

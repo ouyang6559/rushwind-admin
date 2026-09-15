@@ -1,6 +1,6 @@
 //! Config loading — parses the vendored reference yaml files
 //! (`configs/data.yaml`, `configs/auth.yaml`, `configs/oss.yaml`) with
-//! the same env overrides the reference honors (`GWA_AUTH_JWT_*`,
+//! the same env overrides honors (`GWA_AUTH_JWT_*`,
 //! plus `GWA_DATABASE_SOURCE` / `GWA_REDIS_ADDR` / `GWA_REDIS_PASSWORD`
 //! for out-of-container runs).
 
@@ -240,7 +240,7 @@ impl Config {
             refresh_token_expires: String::new(),
         });
 
-        // The reference's code defaults (authenticator.go): access 15 min,
+        // The code defaults : access 15 min,
         // refresh 7 days.
         let access_token_expires_secs = std::env::var("GWA_ACCESS_TOKEN_EXPIRES_SECS")
             .ok()

@@ -1,4 +1,4 @@
-//! UserRepo — the port of `internal/data/user_repo.go`: tenant-scoped
+//! UserRepo — tenant-scoped
 //! user queries, the credential verify with the dummy-hash timing
 //! equalizer, identifier resolution, exists checks, and the credential
 //! mutations (create/update password, history append).
@@ -94,7 +94,7 @@ impl<'a> UserRepo<'a> {
             .map_err(db_err)
     }
 
-    /// FindUsernameByIdentifier (user_repo.go:1168-1223): `@` → email,
+    /// FindUsernameByIdentifier (module:1168-1223): `@` → email,
     /// all-digits → mobile (ambiguous → 500), miss → input unchanged.
     pub async fn find_username_by_identifier(
         &self,
@@ -180,7 +180,7 @@ impl<'a> UserRepo<'a> {
         }
     }
 
-    // ----- credentials (user_credential_repo.go) -----
+    // ----- credentials  -----
 
     pub async fn find_credential(
         &self,
@@ -255,7 +255,7 @@ impl<'a> UserRepo<'a> {
     }
 
     /// The password-history read/append over `extra_info.password_history`
-    /// (user_credential_password_policy.go).
+    /// (module).
     pub fn read_history(cred: &credentials::Model) -> Vec<String> {
         cred.extra_info
             .as_ref()

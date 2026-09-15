@@ -1,5 +1,4 @@
-//! TenantService — the port of the reference
-//! internal/service/tenant_service.go: tenant CRUD, the with-admin
+//! TenantService — //! internal/service/service: tenant CRUD, the with-admin
 //! provisioning (tenant + template role + admin user + credential in one
 //! transaction, then AssignTenantAdmin semantics), TenantExists (code OR
 //! name), usage counts, and CleanupData (wipe tenant-scoped rows, park
@@ -470,7 +469,7 @@ impl gen_rust::gen::services::TenantServiceHandlers for TenantService {
             .map_err(db_err)?
             .ok_or_else(|| not_found("tenant"))?;
         // Cleanup semantics ride along: the tenants themselves are parked,
-        // not deleted (tenant_service.go Delete → cleanup + OFF).
+        // not deleted (module Delete → cleanup + OFF).
         self.cleanup_rows(row.id).await?;
         let mut a: crate::data::sys_tenants::ActiveModel = row.into();
         a.status = Set(Some("OFF".into()));
@@ -533,7 +532,7 @@ impl gen_rust::gen::services::TenantServiceHandlers for TenantService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: TenantExistsRequest,
     ) -> Result<TenantExistsResponse, StatusError> {
-        // OR semantics (the reference quirk noted at tenant_repo.go:327).
+        // OR semantics.
         let mut query = crate::data::sys_tenants::Entity::find();
         if !req.code.is_empty() && !req.name.is_empty() {
             query = query.filter(

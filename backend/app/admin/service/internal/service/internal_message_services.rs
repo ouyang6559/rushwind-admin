@@ -1,6 +1,5 @@
 //! InternalMessageService / InternalMessageCategoryService /
-//! InternalMessageRecipientService — the ports of the reference
-//! internal_message*.go: message CRUD, send (direct recipients with
+//! InternalMessageRecipientService — inbox surface:
 //! denormalized title/content, status RECEIVED immediately), revoke with
 //! recipient cascade, category CRUD, and the user inbox surface.
 
@@ -95,7 +94,7 @@ pub struct InternalMessageService {
 
 impl InternalMessageService {
     /// Insert recipients with the denormalized title/content (status
-    /// RECEIVED immediately — the reference's contract for inbox reads).
+    /// RECEIVED immediately — contract for inbox reads).
     pub async fn insert_recipients(
         &self,
         tenant_id: u32,
@@ -463,7 +462,7 @@ impl gen_rust::gen::services::InternalMessageRecipientServiceHandlers
             crate::data::scope::Viewer::from_ctx(&ctx),
         );
         let (rows, total) = repo.paged_inbox(payload.user_id, &req).await?;
-        // One IN query backfills the messages (the reference's N+1 guard).
+        // One IN query backfills the messages (N+1 guard).
         let message_ids: Vec<u32> = rows.iter().filter_map(|r| r.message_id).collect();
         let messages: std::collections::HashMap<u32, crate::data::internal_messages::Model> =
             if message_ids.is_empty() {

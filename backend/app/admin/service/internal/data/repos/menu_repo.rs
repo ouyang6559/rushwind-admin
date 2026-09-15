@@ -1,4 +1,4 @@
-//! MenuRepo — the port of `internal/data/menu_repo.go`: platform-global
+//! MenuRepo — platform-global
 //! rows (menus carry no tenant column), all predicates owned here.
 
 use sea_orm::sea_query::Condition;

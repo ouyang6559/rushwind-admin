@@ -1,4 +1,4 @@
-//! OrgUnitRepo — the port of `internal/data/org_unit_repo.go`: tenant-scoped queries with
+//! OrgUnitRepo — tenant-scoped queries with
 //! all predicates owned here (never ad-hoc in services).
 
 use sea_orm::sea_query::Condition;

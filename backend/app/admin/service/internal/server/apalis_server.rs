@@ -1,4 +1,4 @@
-//! ApalisServer — the port of the reference `internal/server/asynq_server.go`
+//! ApalisServer
 //! as a proper lifecycle transport: an apalis worker over the
 //! `rushwind-apalis-postgres` storage (Postgres queue table instead of
 //! Redis lists — same push/claim/ack shape, framework-native). The
@@ -65,7 +65,7 @@ impl ApalisServer {
         Ok(())
     }
 
-    /// The task handlers (asynq_server.go registrations).
+    /// The task handlers (module registrations).
     async fn run_handler(
         db: &sea_orm::DatabaseConnection,
         type_name: &str,
@@ -190,7 +190,7 @@ pub fn cron_server(
         CronSpec::parse(spec).expect("static cron spec parses")
     }
 
-    // System crons (task_service.go:357-379).
+    // System crons.
     let server = CronServer::new("cron://admin")
         .with_job(CronJob::new(
             "tenant_expiry_scan",

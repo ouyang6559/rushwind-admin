@@ -1,5 +1,5 @@
-//! LanguageService — the port of the reference internal/service/language_service.go
-//! (one file per service, mirroring the reference layout).
+//! LanguageService — service layer for module
+
 
 use std::sync::Arc;
 

@@ -1,5 +1,4 @@
-//! OrgUnitService — the port of the reference
-//! internal/service/org_unit_service.go: org-unit CRUD with the
+//! OrgUnitService — //! internal/service/service: org-unit CRUD with the
 //! materialized `path` maintenance (create appends the path segment;
 //! reparenting rewrites the subtree's paths; deleting cascades to
 //! descendants) and tree-assembly semantics (flat list ordered by

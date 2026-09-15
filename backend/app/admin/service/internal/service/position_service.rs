@@ -1,5 +1,4 @@
-//! PositionService — the port of the reference
-//! internal/service/position_service.go: position CRUD over
+//! PositionService — //! internal/service/service: position CRUD over
 //! `sys_positions`.
 
 use std::sync::Arc;

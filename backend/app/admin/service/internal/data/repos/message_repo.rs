@@ -1,4 +1,4 @@
-//! InternalMessage repos — the ports of the reference message repos:
+//! InternalMessage repos — message repos:
 //! send inserts denormalized recipients (status RECEIVED immediately);
 //! delete/revoke cascade recipient rows; the inbox is the user-scoped
 //! recipient list with one IN-query backfill.
@@ -23,7 +23,7 @@ impl<'a> InternalMessageRepo<'a> {
     }
 
     /// SendMessage's recipient fan-out: denormalized title/content rows
-    /// with status RECEIVED immediately (the reference never uses SENT).
+    /// with status RECEIVED immediately (never uses SENT).
     pub async fn insert_recipients(
         &self,
         tenant_id: u32,
@@ -131,7 +131,7 @@ impl<'a> InternalMessageRecipientRepo<'a> {
         Ok((rows, total))
     }
 
-    /// One IN query backfills the parent messages (the reference's N+1 guard).
+    /// One IN query backfills the parent messages (N+1 guard).
     pub async fn list_messages_by_ids(
         &self,
         ids: &[u32],

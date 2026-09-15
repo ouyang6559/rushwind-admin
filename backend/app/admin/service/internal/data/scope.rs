@@ -1,4 +1,4 @@
-//! The viewer context — the port of `pkg/entgo/viewer` + go-crud's
+//! The viewer context — standalone + go-crud's
 //! `TenantPrivacy` rule. Every repository receives a [`Viewer`] and
 //! derives its query predicates from it; there is exactly one place that
 //! decides tenancy filtering.
@@ -15,7 +15,7 @@ use rushwind_http_binding::ctx::RequestContext;
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub enum ViewerKind {
-    /// No credentials — the reference's `NewNoopContext` (public routes).
+    /// No credentials — `NewNoopContext` (public routes).
     Noop,
     /// A verified user context: platform when tenant 0.
     User,
@@ -23,7 +23,7 @@ pub enum ViewerKind {
     System,
 }
 
-/// The full viewer surface mirrors the reference viewer API; methods a
+/// The full viewer surface mirrors viewer API; methods a
 /// service has not migrated to yet stay as part of the data-layer API.
 #[allow(dead_code)]
 #[derive(Clone, Debug, Copy)]

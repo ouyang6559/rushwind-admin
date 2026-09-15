@@ -1,4 +1,4 @@
-//! ApiService — the port of the reference internal/service/api_service.go:
+//! ApiService — service layer:
 //! `sys_apis` CRUD plus SyncApis (truncate + rebuild from the vendored
 //! OpenAPI document, module mapped from the service tag) and
 //! GetWalkRouteData. Every mutation resets the authorization policies.
@@ -24,8 +24,8 @@ fn status_to_proto(s: &str) -> i32 {
     }
 }
 
-/// The reference `ServiceTagToBusinessModule` map
-/// (pkg/constants/module_mapping.go): tag → module string.
+/// The `ServiceTagToBusinessModule` map
+/// (pkg/constants/module): tag → module string.
 fn tag_to_module(tag: &str) -> &'static str {
     match tag {
         "AdminPortalService" | "DashboardService" | "AuthenticationService" => "DASHBOARD",
@@ -242,7 +242,7 @@ impl gen_rust::gen::services::ApiServiceHandlers for ApiService {
         _req: Empty,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        // The OpenAPI document is embedded in the binary (the reference's
+        // The OpenAPI document is embedded in the binary (
         // `assets.OpenApiData`), never read from the filesystem.
         let doc: serde_yaml::Value = serde_yaml::from_str(crate::assets::OPENAPI_DATA)
             .map_err(|e| internal_error(format!("openapi parse: {e}")))?;

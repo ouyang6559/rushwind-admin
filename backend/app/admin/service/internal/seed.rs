@@ -1,5 +1,5 @@
-//! Boot seeds — the port of the reference service constructors' init():
-//! when a table is empty the default data (pkg/constants/default_data.go)
+//! Boot seeds:
+//! when a table is empty the default data is inserted
 //! is inserted under a system viewer: superuser + credentials + role
 //! binding, roles (+ role metadata), permission groups, permissions,
 //! menus, languages, config keys.
@@ -238,7 +238,7 @@ async fn seed_permissions(state: &Arc<AppState>) -> Result<(), String> {
     Ok(())
 }
 
-/// The 30 fixed-ID default menus (default_data.go): id, parent, type,
+/// The 30 fixed-ID default menus: id, parent, type,
 /// path, name, component, module.
 async fn seed_menus(state: &Arc<AppState>) -> Result<(), String> {
     use crate::data::sys_menus as menus;

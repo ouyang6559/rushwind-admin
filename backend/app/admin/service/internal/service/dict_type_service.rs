@@ -1,5 +1,5 @@
-//! DictTypeService — the port of the reference internal/service/dict_type_service.go
-//! (one file per service, mirroring the reference layout).
+//! DictTypeService — service layer for module
+
 
 use std::sync::Arc;
 
@@ -149,7 +149,7 @@ impl gen_rust::gen::services::DictTypeServiceHandlers for DictTypeService {
         req: DeleteDictTypeRequest,
     ) -> Result<Empty, StatusError> {
         let _ = ctx;
-        // Delete cascades the type's entries (the reference Delete =
+        // Delete cascades the type's entries (batch delete). BatchDelete(ids).
         // BatchDelete(ids)).
         crate::data::sys_dict_entries::Entity::delete_many()
             .filter(crate::data::sys_dict_entries::Column::TypeId.is_in(req.ids.clone()))

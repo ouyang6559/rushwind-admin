@@ -1,4 +1,4 @@
-//! LanguageRepo — the port of `internal/data/language_repo.go`: platform-global rows with
+//! LanguageRepo — platform-global rows with
 //! all predicates owned here (never ad-hoc in services).
 
 use sea_orm::sea_query::Condition;

@@ -1,5 +1,4 @@
-//! ScriptService and ScriptLogService — the ports of the reference
-//! script_service.go / script_log_service.go: script CRUD over
+//! ScriptService and ScriptLogService — //! module / service: script CRUD over
 //! `sys_scripts` (TestRun reports UNIMPLEMENTED until the Lua/JS engine
 //! phase), and the `sys_script_logs` list/count/purge surface.
 
@@ -215,7 +214,7 @@ impl gen_rust::gen::services::ScriptServiceHandlers for ScriptService {
         _req: TestRunScriptRequest,
     ) -> Result<TestRunScriptResponse, StatusError> {
         // The script engine (Lua/JS) lands with the script-runtime phase;
-        // the reference reports UNIMPLEMENTED without engines too.
+        
         Err(status_error("UNIMPLEMENTED", "script runtime not wired"))
     }
 
@@ -224,7 +223,7 @@ impl gen_rust::gen::services::ScriptServiceHandlers for ScriptService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         _req: Empty,
     ) -> Result<gen_rust::proto::script::service::v1::ListHookPointsResponse, StatusError> {
-        // The entity-hook registry (script_entity_hooks.go).
+        // The entity-hook registry (module).
         let hook_points = vec![
             "user.before_create",
             "user.after_create",

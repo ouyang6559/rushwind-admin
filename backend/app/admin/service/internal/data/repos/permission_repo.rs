@@ -1,4 +1,4 @@
-//! PermissionRepo — the port of `internal/data/permission_repo.go`: platform-global rows with
+//! PermissionRepo — platform-global rows with
 //! all predicates owned here (never ad-hoc in services).
 
 use sea_orm::sea_query::Condition;

@@ -1,4 +1,4 @@
-//! UserService — the port of the reference internal/service/user_service.go:
+//! UserService — service layer:
 //! tenant-scoped user CRUD (list/get/create/update/delete/exists) plus the
 //! forced password reset (EditUserPassword). Passwords arrive
 //! base64(AES-CBC) like the login flow and are stored as bcrypt.

@@ -1,5 +1,4 @@
-//! AuthenticationService — the full port of the reference
-//! `internal/service/authentication_service.go` login chain: rate-limit
+//! AuthenticationService — the full login chain: rate-limit
 //! gate → captcha gate → tenant resolve → login policies → identifier
 //! resolution → AES-decrypted bcrypt credential verify (dummy-hash
 //! timing equalizer) → user/policy re-checks → authority resolution
@@ -506,7 +505,7 @@ impl AuthenticationServiceHandlers for AuthenticationService {
         let identifier = req.identifier.unwrap_or_default();
         if !identifier.is_empty() {
             // The anti-enumeration contract: unknown identifiers answer
-            // success silently (authentication_forgot_password.go).
+            // success silently (module).
             let row = credentials::Entity::find()
                 .filter(
                     Condition::all()
@@ -532,7 +531,7 @@ impl AuthenticationServiceHandlers for AuthenticationService {
                 .await;
                 // Delivery rides the SMTP notification channel; without a
                 // configured relay the code stays retrievable server-side
-                // (same fail mode as the reference without channels).
+                // (same fail mode as without channels).
                 eprintln!("[forgot-password] reset code for {identifier}: {code}");
             }
         }
@@ -776,7 +775,7 @@ impl AuthenticationServiceHandlers for AuthenticationService {
 impl AuthenticationService {
     async fn do_password(&self, ctx: Ctx, req: LoginRequest) -> Result<LoginResponse, StatusError> {
         let client_ip = ctx.ip.clone();
-        // The reference reads GetUsername() — only the Username oneof
+        // The reads GetUsername() — only the Username oneof
         // variant carries; email/mobile identifiers answer the uniform
         // failure path.
         let raw_identifier = match &req.identifier {

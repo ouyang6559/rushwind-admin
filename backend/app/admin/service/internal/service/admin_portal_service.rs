@@ -1,4 +1,4 @@
-//! AdminPortalService — the reference admin_portal_service.go: the
+//! AdminPortalService: the
 //! post-login surface (navigation tree from the roles' menus, permission
 //! codes, and the combined initial context).
 

@@ -1,4 +1,4 @@
-//! Captcha — the reference's go-utils/captcha wrapper: DriverString,
+//! Captcha — 6-char alphanumeric challenges rendered as PNG:
 //! 6 chars from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, 10-minute TTL,
 //! Redis key `gowind:captcha:{id}`, verify-and-delete on match.
 

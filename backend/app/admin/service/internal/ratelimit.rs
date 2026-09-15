@@ -1,5 +1,4 @@
-//! The Redis login rate limiter — the port of
-//! `internal/data/login_rate_limiter.go`: 5 failures / 15 min window,
+//! The Redis login rate limiter: 5 failures / 15 min window,
 //! per-IP and per-username keys, Lua atomic incr-if-not-locked,
 //! fail-open on Redis errors.
 

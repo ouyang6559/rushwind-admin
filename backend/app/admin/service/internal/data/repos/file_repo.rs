@@ -1,4 +1,4 @@
-//! FileRepo — the port of `internal/data/file_repo.go`: tenant-scoped queries with
+//! FileRepo — tenant-scoped queries with
 //! all predicates owned here (never ad-hoc in services).
 
 use sea_orm::sea_query::Condition;

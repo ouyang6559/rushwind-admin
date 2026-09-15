@@ -1,4 +1,4 @@
-//! MfaService — the port of the reference `internal/service/mfa_service.go`:
+//! MfaService — `internal/service/module`:
 //! TOTP enrollment (secret cached server-side until confirm), status
 //! listing, disable/revoke, and the unauthenticated challenge completion
 //! that issues the token pair after a successful code.
@@ -128,7 +128,7 @@ impl MfaServiceHandlers for MfaService {
         req: GetMfaStatusRequest,
     ) -> Result<GetMfaStatusResponse, crate::state::StatusError> {
         let (uid, tid, _) = self.ctx_of(&ctx)?;
-        let _ = &req; // the reference keys off the operator identity
+        let _ = &req; // keys off the operator identity
         let factor = self.factor_for(tid, uid).await;
         let mut enrolled = Vec::new();
         if let Some(f) = &factor {
@@ -176,7 +176,7 @@ impl MfaServiceHandlers for MfaService {
         req: StartEnrollMethodRequest,
     ) -> Result<StartEnrollMethodResponse, crate::state::StatusError> {
         let (uid, tid, _) = self.ctx_of(&ctx)?;
-        // Only TOTP is enrollable end-to-end (the reference's SMS/WebAuthn
+        // Only TOTP is enrollable end-to-end; SMS/WebAuthn
         // branches need external providers).
         if req.method != 0 {
             return Err(status_error("BAD_REQUEST", "unsupported mfa method"));
@@ -191,7 +191,7 @@ impl MfaServiceHandlers for MfaService {
         let otp_auth_url = format!("otpauth://totp/GoWindAdmin:{account}?secret={secret}&issuer=GoWindAdmin&algorithm=SHA1&digits=6&period=30");
         // QR as a PNG data URI.
         // SVG rendering needs no native image stack; the data URI rides
-        // the same wire field the reference fills with a PNG.
+        // the same wire field fills with a PNG.
         let qr =
             qrcode::QrCode::new(otp_auth_url.as_bytes()).map_err(|_| internal_error("qr code"))?;
         let svg = qr

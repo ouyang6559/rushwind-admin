@@ -16,7 +16,7 @@ pub struct AppState {
     pub redis: ConnectionManager,
     /// The verification engine the auth gate rides (public key).
     pub authenticator: Arc<dyn rushwind_authn::Authenticator>,
-    /// The mint engine (private key) — RS256, the reference keypair.
+    /// The mint engine (private key) — RS256.
     pub jwt: rushwind_authn_jwt::JwtAuthenticator,
     pub tokens: TokenStore,
     /// The SSE notification hub (`/events` subscribers).
@@ -49,7 +49,7 @@ impl AppState {
             .await
             .map_err(|e| format!("redis connect: {e}"))?;
 
-        // The mint engine — the reference auth.yaml private key (or env).
+        // The mint engine — auth.yaml private key (or env).
         let private_pem = cfg
             .jwt_private_key
             .clone()
@@ -81,7 +81,7 @@ impl AppState {
 }
 
 /// The error envelope helper: reason → the admin error table's HTTP
-/// status (`StatusError::new`), the reference's `errors.<Reason>` shape.
+/// status (`StatusError::new`) and the `<Reason>` literal.
 pub fn status_error(
     reason: &'static str,
     message: impl Into<String>,
@@ -102,8 +102,7 @@ pub fn operator_missing() -> StatusError {
 
 pub type StatusError = rushwind_http_binding::envelope::StatusError;
 
-/// The verified operator from the request context — the port of
-/// `auth.FromContext(ctx)` (pkg/middleware/auth/context.go).
+/// The verified operator extracted from the request context claims.
 pub fn operator_of(
     ctx: &rushwind_http_binding::ctx::RequestContext,
 ) -> Result<UserTokenPayload, StatusError> {

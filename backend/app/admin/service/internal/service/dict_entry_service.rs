@@ -1,5 +1,5 @@
-//! DictEntryService — the port of the reference internal/service/dict_entry_service.go
-//! (one file per service, mirroring the reference layout).
+//! DictEntryService — service layer for module
+
 
 use std::sync::Arc;
 

@@ -1,4 +1,4 @@
-//! UserMfaFactorRepo — the port of `internal/data/mfa_factor_repo.go`: tenant-scoped queries with
+//! UserMfaFactorRepo — tenant-scoped queries with
 //! all predicates owned here (never ad-hoc in services).
 
 use sea_orm::sea_query::Condition;

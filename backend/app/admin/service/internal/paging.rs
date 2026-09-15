@@ -1,5 +1,5 @@
-//! PagingRequest → SeaORM select assembly — the port of the reference's
-//! go-crud paging/filter pipeline: the `query` JSON filter syntax
+//! PagingRequest → SeaORM select assembly — the go-crud
+//! paging/filter pipeline: the `query` JSON filter syntax
 //! (rust-utils query_parser, `__`-suffixed operators, snake-cased
 //! fields), the `orderBy` JSON-array string, the page/offset/none paging
 //! modes. PG lacks ILIKE in sea-query → case-insensitive matching goes

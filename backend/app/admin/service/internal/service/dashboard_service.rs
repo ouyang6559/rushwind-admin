@@ -1,5 +1,4 @@
-//! DashboardService — the port of the reference
-//! internal/service/dashboard_service.go: overview counts, login trend,
+//! DashboardService — //! internal/service/service: overview counts, login trend,
 //! action/status distributions from the audit tables.
 
 use std::sync::Arc;

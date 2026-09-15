@@ -1,15 +1,14 @@
-//! The auth gate for the protected subtree — the port of the reference
-//! `pkg/middleware/auth` middleware.
+//! The auth gate for the protected subtree — //! `pkg/middleware/auth` middleware.
 //!
-//! Two-stage validation, matching the reference's
+//! Two-stage validation:
 //! `TokenChecker.IsValidAccessToken` → `Authenticator.Authenticate(ACCESS)`:
 //! signature/validity through the framework engine, then the server-side
 //! Redis whitelist (`at:{ct}:{uid}:{jti}` exact compare) and blacklist
 //! (`bl:{jti}`) checks through [`AccessTokenChecker`]. Failures render
 //! the four-field status envelope: reason `UNAUTHORIZED`, and the exact
-//! message the reference middleware's branch pins — `missing bearer
+//! message the wire contract pins — `missing bearer
 //! token` when no bearer credential is presented, `access token expired`
-//! for EVERY validation failure (the reference collapses all causes onto
+//! for EVERY validation failure (all causes collapse onto
 //! that text).
 //!
 //! Success inserts the claim bag into the request extensions — the
@@ -88,8 +87,7 @@ pub async fn auth_gate(
 }
 
 /// The middleware failure: the status the admin error tables anchor to
-/// `UNAUTHORIZED` (401; the fallback mirrors the reference's fixed
-/// `errors.Unauthorized`), and the reference branch's message text.
+/// `UNAUTHORIZED` (401), and the branch's fixed message text.
 fn unauthorized(err: AuthnError) -> rushwind_http_binding::envelope::StatusError {
     let message = match err {
         AuthnError::MissingBearerToken => "missing bearer token",

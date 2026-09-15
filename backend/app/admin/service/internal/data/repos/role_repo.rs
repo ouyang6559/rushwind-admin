@@ -1,4 +1,4 @@
-//! RoleRepo — the port of `internal/data/role_repo.go`: role CRUD,
+//! RoleRepo — role CRUD,
 //! permission bindings, role codes by ids, and the template copy used by
 //! tenant provisioning.
 

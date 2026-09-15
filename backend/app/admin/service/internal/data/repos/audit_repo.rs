@@ -1,4 +1,4 @@
-//! AuditRepo — the port of the reference audit-log repos (login, api,
+//! AuditRepo — audit-log repos (login, api,
 //! operation, data-access, permission, policy-evaluation): newest-first
 //! listing with paging over the six append-only tables.
 

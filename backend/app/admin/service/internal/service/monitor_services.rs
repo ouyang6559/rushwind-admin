@@ -1,5 +1,4 @@
-//! ServerMonitorService and RedisCacheMonitorService — the ports of the
-//! reference server_monitor_service.go / redis_cache_monitor_service.go:
+//! ServerMonitorService and RedisCacheMonitorService:
 //! single-Get surfaces over host vitals and Redis INFO.
 
 use std::sync::Arc;

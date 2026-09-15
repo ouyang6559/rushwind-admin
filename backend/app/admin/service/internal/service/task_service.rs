@@ -1,4 +1,4 @@
-//! TaskService — the port of the reference internal/service/task_service.go:
+//! TaskService — service layer:
 //! `sys_tasks` CRUD, the asynq-backed start/stop/restart controls (the
 //! in-process scheduler phase; row semantics and validations match today),
 //! ListTaskTypeName over the registered handler set, and the bulk
@@ -19,8 +19,8 @@ use gen_rust::proto::task::service::v1::{
 };
 use pbjson_types::Empty;
 
-/// The task types registered in the reference asynq server
-/// (asynq_server.go + pkg/task).
+/// The task types registered in asynq server
+/// (module + pkg/task).
 const REGISTERED_TASK_TYPES: &[&str] = &[
     "backup",
     "tenant_expiry_scan",
@@ -209,7 +209,7 @@ impl gen_rust::gen::services::TaskServiceHandlers for TaskService {
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
         let row = self.load(payload.tenant_id, req.id).await?;
-        // The reference fetches the old row first (stale scheduler-entry
+        // The fetches the old row first (stale scheduler-entry
         // guard) and backfills type_name when the payload omits it.
         let mut a: crate::data::sys_tasks::ActiveModel = row.into();
         if let Some(data) = &req.data {
@@ -311,7 +311,7 @@ impl gen_rust::gen::services::TaskServiceHandlers for TaskService {
             seen.push(row.type_name.clone());
             restarted += 1;
         }
-        // System crons (task_service.go:357-379): hourly tenant expiry
+        // System crons: hourly tenant expiry
         // scan + 03:30 audit archive re-register on every restart.
         restarted += 2;
         Ok(RestartAllTaskResponse {

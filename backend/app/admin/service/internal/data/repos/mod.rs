@@ -1,10 +1,9 @@
-//! Repository layer — the port of the reference `internal/data/*_repo.go`
-//! (one file per repo, mirroring the reference layout). Repos own ALL
+//! Repository layer — `internal/data/*module`
+//! Repos own ALL
 //! query predicates: tenancy rides the [`Viewer`], never ad-hoc filters
 //! in services.
 //!
-//! The full repo surface is the data-layer API: methods mirroring the
-//! reference repos stay even where a service has not migrated yet.
+//! The full repo surface is the data-layer API.
 #![allow(dead_code)]
 
 pub mod access_key_repo;

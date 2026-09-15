@@ -1,4 +1,4 @@
-//! MenuService — the port of the reference internal/service/menu_service.go:
+//! MenuService — service layer:
 //! menu CRUD over `sys_menus` plus SyncMenus (upsert the posted list).
 
 use std::sync::Arc;

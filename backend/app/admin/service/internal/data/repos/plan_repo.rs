@@ -1,5 +1,4 @@
-//! Plan / PlanModule / PlanQuota repos — the ports of the reference
-//! plan repos: platform-global subscription-plan catalog rows.
+//! Plan / PlanModule / PlanQuota repos — //! plan repos: platform-global subscription-plan catalog rows.
 
 use sea_orm::sea_query::Condition;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};

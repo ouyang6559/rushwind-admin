@@ -1,4 +1,4 @@
-//! ConfigService — the port of the reference internal/service/config_service.go:
+//! ConfigService — service layer:
 //! key-value platform config CRUD; built-in rows refuse deletion; the
 //! value_type INVALID zero-value is skipped on writes.
 
@@ -127,7 +127,7 @@ impl gen_rust::gen::services::ConfigServiceHandlers for ConfigService {
             .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
         let key = data.key.clone().unwrap_or_default();
 
-        // allow_missing upsert (config_repo.go semantics).
+        // allow_missing upsert (upsert semantics).
         let existing = if req.allow_missing == Some(true) && !key.is_empty() {
             crate::data::sys_configs::Entity::find()
                 .filter(crate::data::sys_configs::Column::Key.eq(key.clone()))

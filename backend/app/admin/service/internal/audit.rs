@@ -1,17 +1,17 @@
-//! The audit-write layer — the port of `pkg/middleware/logging` (the
-//! applogging.Server wrapper): post-handler persistence into the six
+//! The audit-write layer (the
+//! applogging.Server wrapper equivalent): post-handler persistence into the six
 //! audit tables.
 //!
-//! Trigger rules (logging.go):
+//! Trigger rules:
 //! * login audit — Login / VerifyMFAChallenge / Logout operations only,
-//!   with the stateless risk heuristics (login_audit_log.go:222-393);
+//!   with the stateless risk heuristics;
 //! * api audit — every request except Login / VerifyMFAChallenge;
 //! * operation audit — write methods only, session-maintenance
 //!   operations skipped (`sessionOnlyOperations`);
 //! * permission audit — write methods only, same session skips, target
 //!   from the operation's service part, action from the method part.
 //!
-//! The JWT is parsed from the bearer token directly (the reference
+//! The JWT is parsed from the bearer token directly (the
 //! `extractAuthToken` path) so the outer layer needs no inner state.
 //! Audit failures never break the response.
 
@@ -26,7 +26,7 @@ use sea_orm::Set;
 
 use crate::state::AppState;
 
-/// `sessionOnlyOperations` (logging.go:25-30).
+/// The session-maintenance operation skip list.
 const SESSION_ONLY: &[&str] = &[
     "/admin.service.v1.AuthenticationService/Login",
     "/admin.service.v1.AuthenticationService/RefreshToken",
@@ -168,7 +168,7 @@ fn login_username(body: &Option<String>, audit_header: &str) -> String {
     audit_header.to_string()
 }
 
-/// computeRiskScore (login_audit_log.go:222-262).
+/// Risk score computation (0-100).
 fn risk_score(failed: bool, user_id: u32, username: &str, ip: &str, has_device: bool) -> i32 {
     let mut score = 0;
     if failed {
@@ -196,7 +196,7 @@ fn risk_level(score: u32) -> &'static str {
     }
 }
 
-/// computeRiskFactors (login_audit_log.go:285-380) — dedup + sorted.
+/// Risk factors — deduped and sorted.
 #[allow(clippy::too_many_arguments)]
 fn risk_factors(
     failed: bool,
@@ -265,7 +265,7 @@ fn risk_factors(
     set.into_iter().map(String::from).collect()
 }
 
-/// parseTargetAndAction (permission_audit_log.go:42-74).
+/// Target/action parse from the operation string.
 fn parse_target_and_action(operation: &str) -> Option<(String, String)> {
     let slash = operation.rfind('/')?;
     if slash == operation.len() - 1 {

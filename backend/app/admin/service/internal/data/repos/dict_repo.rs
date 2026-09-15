@@ -1,5 +1,4 @@
-//! DictTypeRepo / DictEntryRepo — the ports of `internal/data/dict_type_repo.go`
-//! and `dict_entry_repo.go`: tenant-scoped dictionary trees with cascade
+//! DictTypeRepo / DictEntryRepo — tenant-scoped dictionary trees with cascade
 //! deletes and the ListByTypeCode walk (enabled entries by sort_order).
 
 use sea_orm::sea_query::Condition;
@@ -128,7 +127,7 @@ impl<'a> DictEntryRepo<'a> {
         Ok((rows, total))
     }
 
-    /// The ListByTypeCode walk (dict_entry_repo.go:373-423): enabled
+    /// The ListByTypeCode walk: enabled
     /// entries under the type, sort_order ascending.
     pub async fn list_by_type_code(
         &self,

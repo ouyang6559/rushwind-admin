@@ -1,5 +1,5 @@
 //! PermissionAuditLogService — List/Get over `sys_permission_audit_logs`
-//! (the reference permission_audit_log_service.go).
+//! .
 
 use std::sync::Arc;
 

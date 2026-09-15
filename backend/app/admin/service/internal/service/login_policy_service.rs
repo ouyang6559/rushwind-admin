@@ -1,5 +1,4 @@
-//! LoginPolicyService — the port of the reference
-//! internal/service/login_policy_service.go: tenant login-restriction
+//! LoginPolicyService — //! internal/service/service: tenant login-restriction
 //! policies (BLACKLIST/WHITELIST × IP/MAC/REGION/TIME/DEVICE).
 
 use std::sync::Arc;

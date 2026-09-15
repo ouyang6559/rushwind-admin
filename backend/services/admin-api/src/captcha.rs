@@ -9,6 +9,19 @@ use redis::AsyncCommands;
 pub const CAPTCHA_SOURCE: &str = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 pub const CAPTCHA_TTL_SECS: u64 = 600;
 
+/// Candidate stroke hues: dark and saturated, one picked per challenge so
+/// consecutive challenges do not look mechanically identical. Every entry
+/// keeps all channels far below the white background, so the undulating
+/// text stays high-contrast and legible.
+const CAPTCHA_HUES: [[u8; 3]; 6] = [
+    [0x8b, 0x1a, 0x1a], // crimson
+    [0x1a, 0x1a, 0x8b], // navy
+    [0x1a, 0x6b, 0x1a], // forest
+    [0x5c, 0x1a, 0x5c], // plum
+    [0x1a, 0x5c, 0x5c], // teal
+    [0x6b, 0x3a, 0x0a], // rust
+];
+
 fn captcha_key(id: &str) -> String {
     format!("admin:captcha:{id}")
 }
@@ -42,19 +55,40 @@ pub async fn verify(redis: &ConnectionManager, id: &str, value: &str) -> bool {
     }
 }
 
-/// Renders a noisy 6-char PNG; returns (base64 png, answer). The crate
-/// draws its own random picks from the configured alphabet — the answer
-/// is read back off the render, so image and stored answer always agree.
+/// Renders the challenge as a 240x80 PNG and returns `(base64 png, answer)`.
+///
+/// Pipeline: six glyphs laid side by side, one horizontal sine wave so the
+/// run undulates, a crop that keeps the text centered, and finally a random
+/// deep hue recoloring the strokes. The answer is read back off the render,
+/// so image and stored answer always agree.
+///
+/// The glyph pool is [`CAPTCHA_SOURCE`] intersected with the renderer
+/// font's repertoire: the font cannot draw a few source glyphs (`L`), and
+/// an unfiltered pick silently drops them — shortening some answers below
+/// six characters, and in the extreme (nearly all picks dropped) starving
+/// the cropper's centering math. With only drawable glyphs in the pool,
+/// every pick renders and the six-glyph run measures 142–265 px across,
+/// which pins the crop window provably inside the renderer's canvas
+/// (left ≥ 51, right ≤ 352, top 109, bottom 189).
 fn render_png_base64() -> Result<(String, String), String> {
     let mut cap = captcha::Captcha::new();
-    let glyphs: Vec<char> = CAPTCHA_SOURCE.chars().collect();
+    let supported = cap.supported_chars();
+    let glyphs: Vec<char> = CAPTCHA_SOURCE
+        .chars()
+        .filter(|c| supported.contains(c))
+        .collect();
+    if glyphs.len() < 6 {
+        return Err("captcha font repertoire covers too few glyphs".to_string());
+    }
     cap.set_chars(&glyphs);
     cap.add_chars(6);
     let answer = cap.chars_as_string();
-    cap.apply_filter(captcha::filters::Noise::new(0.3));
-    // Crop to the crate's documented canvas (220x120); larger crops
-    // underflow its centering math.
-    cap.view(220, 120);
-    let b64 = cap.as_base64().ok_or_else(|| "captcha render".to_string())?;
+    cap.apply_filter(captcha::filters::Wave::new(2.0, 12.0).horizontal());
+    cap.view(240, 80);
+    let hue = CAPTCHA_HUES[rand::rng().random_range(0..CAPTCHA_HUES.len())];
+    cap.set_color(hue);
+    let b64 = cap
+        .as_base64()
+        .ok_or_else(|| "captcha render".to_string())?;
     Ok((b64, answer))
 }

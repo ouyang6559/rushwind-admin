@@ -14,13 +14,13 @@ path = "cmd/server/main.rs"
 [dependencies]
 admin-api = { path = "../../../api/admin-api" }
 middleware-auth = { path = "../../../pkg/middleware-auth" }
-rushwind-authn = { path = "../../../../../rushwind/crates/rushwind-authn" }
-rushwind-authn-jwt = { path = "../../../../../rushwind/crates/rushwind-authn-jwt" }
-rushwind-http = { path = "../../../../../rushwind/crates/rushwind-http" }
-rushwind-http-binding = { path = "../../../../../rushwind/crates/rushwind-http-binding" }
-rushwind-transport = { path = "../../../../../rushwind/crates/rushwind-transport" }
-rushwind-transport-axum = { path = "../../../../../rushwind/crates/rushwind-transport-axum" }
-rushwind-core = { path = "../../../../../rushwind/crates/rushwind-core" }
+rushwind-authn = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
+rushwind-authn-jwt = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
+rushwind-http = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
+rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
+rushwind-transport = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
+rushwind-transport-axum = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
+rushwind-core = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "json"] }
 tokio = { workspace = true }
 sea-orm = { workspace = true }

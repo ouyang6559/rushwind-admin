@@ -10,6 +10,6 @@ publish = false
 [dependencies]
 async-trait = { workspace = true }
 admin-api = { path = "../../api/admin-api" }
-rushwind-authn = { path = "../../../../rushwind/crates/rushwind-authn" }
-rushwind-http-binding = { path = "../../../../rushwind/crates/rushwind-http-binding" }
+rushwind-authn = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
+rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
 axum = { version = "0.8", default-features = false }

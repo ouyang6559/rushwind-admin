@@ -15,13 +15,13 @@ pbjson-types = { workspace = true }
 serde = { workspace = true }
 async-trait = { workspace = true }
 axum = { version = "0.8", default-features = false }
-rushwind-http-binding = { path = "../../../../rushwind/crates/rushwind-http-binding" }
+rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
 
 [build-dependencies]
 prost-build = { workspace = true }
 protox = { workspace = true }
 pbjson-build = { workspace = true }
-rushwind-gen-http = { path = "../../../../rushwind/crates/rushwind-gen-http" }
+rushwind-gen-http = { git = "https://github.com/tx7do/rushwind", rev = "dd5bc3b87870a946ca56a20849634fb0d8d7fa9f" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }

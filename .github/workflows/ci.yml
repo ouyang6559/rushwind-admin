@@ -24,23 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # The backend workspace consumes the framework monorepo through
-      # relative path dependencies that resolve to a SIBLING of this repo
-      # (e.g. ../../../../../rushwind from app/admin/service). Check it out
-      # inside the workspace, then link it into that sibling position.
-      - uses: actions/checkout@v7
-        with:
-          repository: tx7do/rushwind
-          ref: main
-          path: rushwind
-      - name: Link the framework repo as a sibling of this checkout
-        run: |
-          cd "$GITHUB_WORKSPACE/.."
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            pwsh -NoProfile -Command 'New-Item -ItemType Junction -Path rushwind -Target rushwind-admin\rushwind | Out-Null'
-          else
-            ln -s "$GITHUB_WORKSPACE/rushwind" rushwind
-          fi
+      # The framework monorepo (rushwind crates, rust-utils) is consumed
+      # through git dependencies pinned by rev — cargo fetches them
+      # directly; no sibling checkout or layout assumptions.
 
       - uses: dtolnay/rust-toolchain@stable
         with:

@@ -92,6 +92,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         compile_files.push(p);
     }
 
+    // Canonical input order: directory enumeration order is filesystem-defined
+    // (NTFS yields name order, ext4 hash order), and protoc's descriptor set —
+    // hence the generated ROUTES table — follows the CLI file order, so an
+    // unsorted walk makes route indices platform-dependent.
+    compile_files.sort();
+
     let includes = [proto_root.as_path(), third_party_root.as_path()];
 
     // 1. The annotated full closure via protoc (option bytes preserved) —

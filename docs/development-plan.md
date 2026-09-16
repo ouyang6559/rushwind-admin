@@ -555,6 +555,46 @@ P4 收尾/验收                                    █████  (2-3M)
 >   被环境回收且用户指示未经允许不再动容器，故复跑顺延）→ golden DDL 管道 /
 >   序列化金样扩展 / SSE :7789（Phase 0 尾项）。authz-rbac 接线与
 >   access-token checker 依赖存储阶段（sys_apis / 会话表）。
+> - **会话十二（2026-09-15，迁移框架化 + 现有环境联合测试，框架 4e222ef 已推 / admin b942f9d、50f9efe）**：
+>   用户两条硬性指示：sea-orm-migration 必须接入（schema 所有权归本仓）；迁移能力写入
+>   框架仓。框架新增 rushwind-storage-seaorm-migration：EntityTables::new(name, backend)
+>   .table::<E>()…statement(stmt).build() → EntityTablesMigration；**PG 关键矫正**：Unsigned
+>   列→Integer（sea-query 把 PG unsigned 渲染成 bigint 而 u32 解码只认 int4）、Enum 列→text
+>   （fresh 库无 CREATE TYPE）、单自增 PK 同步矫正+serial。API 事实：sea-orm 2.0 的
+>   ColumnType::Unsigned 是单元变体；MigrationTrait 是 async_trait 宏——impl 必须同标注且
+>   manager 参数裸写 &SchemaManager。**联合测试**（citus :5432 + 宿主 Redis :6379，未动
+>   docker）全绿：migrate 42 表 → seed → REST/SSE/apalis/cron 四 transport 同生命周期 →
+>   门控 401 信封逐字节 → captcha → AES 登录（RS256 全套 claims）→ 数据面 200 → 双
+>   cookie 轮换 → logout → 登出后 401 → openapi 200。联合测试揪出三真 bug：captcha 渲染
+>   panic（set_chars 只设字母表不画图 + view 越界）；登录权限常量 system: 前缀应为 sys:；
+>   seed::run 用 let _ 吞错改传播。运维事实：sqlx 只认 URL 形 DSN + ?sslmode=disable；
+>   seed 管理员 admin/Abcd@1234（AES 前端层密文后登录）。
+> - **会话十三（2026-09-15，SSE 通道对位——CORS 修复 + 跨用户泄漏修复，c506606 + 25e76bf
+>   已推）**：根因=Rust SSE 无 OPTIONS 处理器、流响应无 CORS 头。全照源码推导（kratos
+>   sse v1.3.8；bootstrap v0.0.4 不调 WithCORSAllowOrigin → corsAllowOrigin 恒 `*`）：
+>   ①预检=鉴权前静态 204+4 头；②鉴权失败一律 401+http.Error 文本形态（body 的 code 带表
+>   值 403 而状态行 401）；③成功路径五头；④事件帧顺序 id→data→event（axum 按 builder 调用
+>   序拼帧）；⑤**真 bug**：Hub unfold 曾丢弃 user_id 过滤 → 跨用户站内信泄漏，修为不匹配
+>   continue；⑥去掉 Go 没有的 keepalive ping；⑦路由接 server.sse.path。四路探针逐字节对位；
+>   binding-spec 新增 §7。
+> - **会话十四（2026-09-15，验证码视觉重做 + 裁剪包络，eb49246）**：去噪椒、每题随机深色
+>   调色板（着色对象=全部纯黑像素，故只描边不上底）、水平正弦波、字形池∩字体字库交集
+>   （font_default.json 缺 'L'，不过滤则答案偶发 <6）；包络拒绝重采样：字形运行宽超出
+>   [96,232]px 即整题重画（拒率 6.6%、32 次预算耗尽 ~1e-37），输出 240×96 对齐前端
+>   110×44 object-contain 盒；修掉裁剪窗切边字形的历史缺陷（旧 220 窗 17.6% 触边→零违例）。
+>   工具教训：Read 不支持 PNG 视觉输入 → 像素统计 + 墨迹密度 ASCII 下采样做结构目检；
+>   netstat 管道 grep 列间空白模式静默零匹配（用 findstr/宽松模式）；服务端起听 ~24-50s；
+>   exe 锁挡 cargo 重链接（重建前 taskkill）；rand 0.10 改名 rng/random_range。
+> - **会话十五（2026-09-16，CI 两连根修——c671430 + e90c655，均已推）**：①快照门连挂五轮
+>   根因=本地 dev server 落的 .vite/deps 缓存被 hash_tree 哈希进清单（目录清空对被握句柄
+>   静默失败）→ 本地过、CI 挂。修（sync-react.sh v4）：哈希宇宙=树上文件 − git 忽略路径
+>   （git check-ignore --stdin -z；git 不可用硬失败）+ --check 失败打 diff 前 40 行。验证
+>   方法论：git worktree add <tmp> HEAD 覆盖修复文件 = CI checkout 精确模拟。**通用铁律：
+>   git-ignored 路径永不出现在 CI checkout——凡"本地扫全树"式清单门不排除 ignored 路径，
+>   就是本地过 CI 挂的定时炸弹。**②ubuntu 挂遮蔽路由索引漂移根因=collect_protos 用未排序
+>   read_dir 收 112 个 proto → 顺序原样进 descriptor → ROUTES 表序平台依赖（NTFS 名序 /
+>   ext4 哈希序）。修：compile_files.sort()（PathBuf 字典序跨平台同排列）。终态：run
+>   35051411873 双 job 全绿——本仓首次 CI 全绿。
 > - **会话十六（2026-09-16，装配层向框架内聚 + 端到端阳性回归）**：服务侧手写
 >   装配（CORS 循环、HttpEdge 尾段、parse_addr、server.yaml serde 镜像、
 >   Go 时长解析、静态 cron 手工挂载）全部下沉 rushwind-bootstrap：框架新增
@@ -597,6 +637,22 @@ P4 收尾/验收                                    █████  (2-3M)
 >   白名单/无套餐/未注册路由 fail-closed 全对位 + 留痕行计数与形状）+
 >   原 17 探针回归全过。新事实：登录流按请求体 tenant_code 划域（不带则
 >   平台域），跨租户标识符一律防枚举回 INVALID_PASSWORD。
+> - **会话十六续3（2026-09-17，MinIO 直连 + 前端全页面走查，e880afd 已推）**：
+>   文件服务三端点接入 rushwind-oss-s3：五内容桶各一引擎实例（path-style，connect 时幂等
+>   create_bucket）；上传内容嗅探覆写客户端 MIME + 签名公开图链（HMAC-SHA256 crypto_key、
+>   1 年期）；新增公开签名图片代理 `/admin/v1/file/image`（挂 pack 内 gate 外，对位参照的
+>   无 Operation 手工路由）；RUSHWIND_OSS_ENDPOINT 环境覆盖供宿主联调。**修真配置 bug**：
+>   MinioSection 字段名与 yaml 键 upload_host/download_host 不匹配（dead code 期未暴露）。
+>   探针 8/8：multipart 400 对位、JSON 上传（bytes 走 base64）、图链字节一致、篡改签名 403、
+>   信封 base64 回环、删后 404。**前端全页面走查**（本仓 react 起独立实例 5899——5888/5889
+>   为并行会话的 go 前端）：29 子页全渲染零崩溃，仪表盘真实统计 + 三图表，登录全链 UI 走通，
+>   清存储后 refresh 静默恢复会话 ✓，用户/角色/权限点/语言/三类审计/策略评估日志全有真数据。
+>   **发现 W1（高，上游前端）**：axios 401 刷新拦截器 refreshTokenQueue 的 Promise 无超时无
+>   reject，触发后全部数据页渐进永久 loading；后端审计行逐笔 200、页面上下文裸 fetch 22ms、
+>   手动 refresh 33ms——网络与后端无罪，修在上游（队列超时/reject + isRefreshing 复位）。
+>   **W2（上游）**：multipart 上传死路径——kratos 无 form-data codec，参照后端同样 400
+>   CODEC；生成客户端的 JSON 上传路径正常且本仓已验。W3：IAB 截图能力损坏，登录页品牌
+>   DOM 验收过（logo/标题/租户编号框/Copyright 全 RushWind），像素级验收待补。
 
 1. [x] 仓库骨架 + workspace（backend/ 结构就位）；CI 已建（.github/workflows/
        ci.yml：fmt/clippy/test + protoc 安装 + sync-protos --check 门，双 OS 矩阵）。

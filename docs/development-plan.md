@@ -580,6 +580,23 @@ P4 收尾/验收                                    █████  (2-3M)
 >   IPv6 回环端口代理挂死（`::1:5432` 超时、`127.0.0.1` 瞬通）——宿主联调
 >   env 必须显式 IPv4，`localhost` 会被 Rust 解析优先走 ::1 导致池超时假象；
 >   另发现更名前的 `gwa-admin-server.exe` 僵尸进程占 7788/7789（已清）。
+> - **会话十六续（同日，授权层落地）**：go 参照语义核实——部署配置
+>   `authz.type: noop`（kratos-authz 三引擎 noop/casbin/opa 中取放行引擎），
+>   认证中间件内含 TenantAccessChecker（仅 tid>0：状态 OFF 拒、READONLY 套餐
+>   到期只读放行 GET/HEAD/OPTIONS、按 path-template+method 查 sys_apis 归类
+>   business_module、套餐模块白名单，全链 fail-closed），authz.Server 按角色
+>   逐个评估首允即短路 + 每次评估落 sys_policy_evaluation_logs 行（含
+>   permission/policy 反查，60s TTL 缓存；traceparent→X-Request-Id、
+>   X-Real-IP→XFF 首段）。Rust 落地：crates/auth 增 TenantAccessChecker/
+>   AuthorizationEvaluator 两 trait + 门内两阶段（401 之后、FORBIDDEN 信封
+>   走错误表），路径模板取 axum MatchedPath（axum 增 matched-path feature）；
+>   服务侧 authorizer.rs 实现两 impl（noop 首角色放行 + 留痕行 + 反查缓存；
+>   本 schema 无 sys_permission_policies 表，反查的 policy 引用恒空——go 侧
+>   亦无管理端点，惰性数据）。验证：租户矩阵探针 14/14（夹具：tenant_code
+>   登录域、ACTIVE 角色绑定、sys:access_backend 权限；OFF/到期只读写拒读通/
+>   白名单/无套餐/未注册路由 fail-closed 全对位 + 留痕行计数与形状）+
+>   原 17 探针回归全过。新事实：登录流按请求体 tenant_code 划域（不带则
+>   平台域），跨租户标识符一律防枚举回 INVALID_PASSWORD。
 
 1. [x] 仓库骨架 + workspace（backend/ 结构就位）；CI 已建（.github/workflows/
        ci.yml：fmt/clippy/test + protoc 安装 + sync-protos --check 门，双 OS 矩阵）。

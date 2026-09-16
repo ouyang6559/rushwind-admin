@@ -93,6 +93,10 @@ pub fn build_router(state: Arc<AppState>, docs: crate::server::docs::Wire) -> ax
     let authenticator = Arc::clone(&state.authenticator);
     let checker = Arc::new(RedisTokenChecker(state.tokens.clone()))
         as Arc<dyn auth::AccessTokenChecker + 'static>;
+    let tenant_checker = Arc::new(crate::authorizer::TenantAccessChecker(Arc::clone(&state)))
+        as Arc<dyn auth::TenantAccessChecker + 'static>;
+    let authorizer = Arc::new(crate::authorizer::AccessAuthorizer::new(Arc::clone(&state)))
+        as Arc<dyn auth::AuthorizationEvaluator + 'static>;
 
     // The per-route layer composition (see the module docs): bind layer
     // outermost always, auth gate inside it on gated routes.
@@ -101,10 +105,14 @@ pub fn build_router(state: Arc<AppState>, docs: crate::server::docs::Wire) -> ax
         if gated {
             let auth = Arc::clone(&authenticator);
             let checker = Arc::clone(&checker);
+            let tenant_checker = Arc::clone(&tenant_checker);
+            let authorizer = Arc::clone(&authorizer);
             let gate = axum::middleware::from_fn(move |req, next| {
                 let auth = Arc::clone(&auth);
                 let checker = Arc::clone(&checker);
-                async move { auth_gate(auth, checker, req, next).await }
+                let tenant_checker = Arc::clone(&tenant_checker);
+                let authorizer = Arc::clone(&authorizer);
+                async move { auth_gate(auth, checker, tenant_checker, authorizer, req, next).await }
             });
             out = out.layer(gate);
         }

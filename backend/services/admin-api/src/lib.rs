@@ -5,6 +5,7 @@
 
 pub mod assets;
 pub mod audit;
+pub mod authorizer;
 pub mod captcha;
 pub mod config;
 pub mod crypto;

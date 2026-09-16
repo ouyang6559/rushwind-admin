@@ -22,7 +22,7 @@ rushwind-apalis-postgres = { git = "https://github.com/tx7do/rushwind", rev = "4
 apalis-core = { workspace = true }
 rushwind-transport = { git = "https://github.com/tx7do/rushwind", rev = "4d3d524cc43b2fc8615ce1625ecc6cbb07d96157" }
 rushwind-transport-axum = { git = "https://github.com/tx7do/rushwind", rev = "4d3d524cc43b2fc8615ce1625ecc6cbb07d96157" }
-axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "json"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "json", "matched-path"] }
 tokio = { workspace = true }
 sea-orm = { workspace = true }
 rushwind-storage-seaorm-migration = { git = "https://github.com/tx7do/rushwind", rev = "4d3d524cc43b2fc8615ce1625ecc6cbb07d96157" }

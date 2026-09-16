@@ -15,4 +15,4 @@ async-trait = { workspace = true }
 proto = { path = "../proto" }
 rushwind-authn = { git = "https://github.com/tx7do/rushwind", rev = "4d3d524cc43b2fc8615ce1625ecc6cbb07d96157" }
 rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "4d3d524cc43b2fc8615ce1625ecc6cbb07d96157" }
-axum = { version = "0.8", default-features = false }
+axum = { version = "0.8", default-features = false, features = ["matched-path"] }

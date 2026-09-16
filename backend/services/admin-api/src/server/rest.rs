@@ -1,7 +1,10 @@
-//! The REST server assembly — //! `internal/server/module`: mounts the full route surface with
-//! null placeholder services, splits the auth-free public subtree from
-//! the gated one (the auth-free set), composes the
-//! per-route layer stack, merges the two, and applies the HTTP edge.
+//! The REST route pack — //! `internal/server/module`: mounts the full
+//! route surface behind the real service implementations, splits the
+//! auth-free public subtree from the gated one (the auth-free set),
+//! composes the per-route layer stack, merges the two with the docs
+//! surface and the audit layer, and hands the router to the lifecycle
+//! assembler — whose edge block (the CORS policy and the request budget
+//! from the server document) wraps the whole thing.
 //!
 //! Per-route layer composition (the `wrap` closure below): the framework
 //! bind layer — body and query binding — outermost on EVERY route, and
@@ -13,9 +16,10 @@
 //! storage phase; until then the gate is the protected subtree's only
 //! defense.
 //!
-//! The CORS policy and request budget are taken verbatim from the
-//! vendored server.yaml `rest` block, through the gorilla-compatible
-//! CORS layer (see rushwind_http::cors_compat — wires
+//! The docs switches (Swagger UI / Redoc / the raw spec mount) ride
+//! the pack's settings node; the CORS policy and the request budget
+//! ride the assembler's per-server edge block, through the
+//! gorilla-compatible CORS layer (see rushwind_http::cors_compat — wires
 //! gorilla/handlers there, whose emission rules tower-http does not
 //! reproduce).
 
@@ -38,7 +42,6 @@ use crate::services::{
 use crate::state::AppState;
 use auth::auth_gate;
 use proto::pool;
-use rushwind_http::{CorsOptions, HttpEdge};
 use rushwind_http_binding::bindgate::bind_run;
 use rushwind_http_binding::wire::RouteWire;
 
@@ -60,10 +63,32 @@ impl auth::AccessTokenChecker for RedisTokenChecker {
     }
 }
 
+/// The admin route pack: the mounted router (see the module docs)
+/// under this pack's settings node (the docs switches). The edge —
+/// the CORS policy and the request budget — rides the assembler's
+/// per-server edge block, not the pack.
+pub fn pack(
+    state: Arc<AppState>,
+) -> impl Fn(
+    serde_json::Value,
+    rushwind_bootstrap::RouteInput,
+) -> Result<rushwind_bootstrap::RouteSurface, rushwind_bootstrap::BootstrapError>
+       + Send
+       + Sync
+       + 'static {
+    move |settings, _input| {
+        let docs = crate::server::docs::wire(settings)?;
+        Ok(rushwind_bootstrap::RouteSurface::new(build_router(
+            Arc::clone(&state),
+            docs,
+        )))
+    }
+}
+
 /// Builds the mounted router. `state` carries the verification engine
 /// and the server-side session store; the assembly order mirrors
 /// module.
-pub fn build_router(state: Arc<AppState>) -> axum::Router {
+pub fn build_router(state: Arc<AppState>, docs: crate::server::docs::Wire) -> axum::Router {
     let descriptor_pool = pool();
     let authenticator = Arc::clone(&state.authenticator);
     let checker = Arc::new(RedisTokenChecker(state.tokens.clone()))
@@ -431,38 +456,15 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
     // The docs surface (Swagger UI / Redoc / raw spec), switched by
     // server.rest.enable_swagger / enable_redoc.
     app = app.merge(crate::server::docs::router(
-        state.cfg.enable_swagger,
-        state.cfg.enable_redoc,
+        docs.enable_swagger,
+        docs.enable_redoc,
     ));
 
     // The audit-write layer:
     // post-handler persistence into the audit tables, outermost so it
     // sees final status codes.
-    let app = app.layer(axum::middleware::from_fn_with_state(
+    app.layer(axum::middleware::from_fn_with_state(
         Arc::clone(&state),
         crate::audit::layer,
-    ));
-
-    // The CORS policy and request budget, taken verbatim
-    // from server.yaml's rest block: credentialed responses (the
-    // refresh-token cookie), the six methods, the six headers, the three
-    // frontend domains plus the local dev ports.
-    // The CORS policy and request budget ride server.yaml's rest block
-    // (parsed in config.rs) — never hardcoded.
-    let mut cors = CorsOptions::default().with_allow_credentials(state.cfg.cors_allow_credentials);
-    for method in &state.cfg.cors_methods {
-        cors = cors.with_allow_method(method.as_str());
-    }
-    for header_name in &state.cfg.cors_headers {
-        cors = cors.with_allow_header(header_name.as_str());
-    }
-    for origin in &state.cfg.cors_origins {
-        cors = cors.with_allow_origin(origin.as_str());
-    }
-    HttpEdge::new()
-        .with_cors_compat(cors)
-        .with_timeout(std::time::Duration::from_secs(
-            state.cfg.rest_timeout_secs.max(1),
-        ))
-        .wrap(app)
+    ))
 }

@@ -5,15 +5,39 @@
 //! * `/q/swagger-ui` — Swagger UI reading that spec;
 //! * `/q/redoc` — Redoc reading the same spec.
 //!
-//! UI assets load from their CDNs; enable via `server.rest.enable_swagger`
-//! and `server.rest.enable_redoc`.
+//! UI assets load from their CDNs; the switches ride the admin route
+//! pack's settings node (`enable_swagger` / `enable_redoc`).
 
 use axum::http::header;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Router;
+use serde::Deserialize;
 
 use crate::assets::OPENAPI_DATA;
+
+/// The docs switches wire (the admin route pack's settings node): one
+/// mount flag per docs surface. A missing node or field leaves its
+/// switch off.
+#[derive(Debug, Default, Deserialize)]
+pub struct Wire {
+    /// Whether the Swagger UI mounts.
+    #[serde(default)]
+    pub enable_swagger: bool,
+    /// Whether Redoc mounts.
+    #[serde(default)]
+    pub enable_redoc: bool,
+}
+
+/// Parses the docs switches from the pack's settings node. A missing
+/// node leaves both switches off.
+pub fn wire(settings: serde_json::Value) -> Result<Wire, rushwind_bootstrap::BootstrapError> {
+    if settings.is_null() {
+        return Ok(Wire::default());
+    }
+    serde_json::from_value(settings)
+        .map_err(|e| rushwind_bootstrap::BootstrapError::Config(format!("docs switches: {e}")))
+}
 
 /// The raw OpenAPI document (YAML).
 pub async fn openapi_yaml() -> impl IntoResponse {

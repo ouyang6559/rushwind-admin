@@ -1,31 +1,20 @@
 //! Config loading — parses the embedded yaml defaults
 //! (`assets/data.yaml`, `assets/auth.yaml`, `assets/oss.yaml`,
-//! `assets/server.yaml`, compiled into the binary) with the same env
-//! overrides honors (`RUSHWIND_AUTH_JWT_*`,
+//! compiled into the binary) with the same env overrides
+//! (`RUSHWIND_AUTH_JWT_*`,
 //! plus `RUSHWIND_DATABASE_SOURCE` / `RUSHWIND_REDIS_ADDR` / `RUSHWIND_REDIS_PASSWORD`
-//! for out-of-container runs).
+//! for out-of-container runs). The server assembly document
+//! (`assets/server.yaml`) belongs to the lifecycle assembler.
 
+use rushwind_bootstrap::DurationWire;
 use serde::Deserialize;
 
 const DATA_YAML: &str = include_str!("../assets/data.yaml");
 const AUTH_YAML: &str = include_str!("../assets/auth.yaml");
 const OSS_YAML: &str = include_str!("../assets/oss.yaml");
-const SERVER_YAML: &str = include_str!("../assets/server.yaml");
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// The REST listener address (`server.rest.addr`, ":7788" form).
-    pub rest_addr: String,
-    pub rest_timeout_secs: u64,
-    pub enable_swagger: bool,
-    pub enable_redoc: bool,
-    pub cors_allow_credentials: bool,
-    pub cors_headers: Vec<String>,
-    pub cors_methods: Vec<String>,
-    pub cors_origins: Vec<String>,
-    pub sse_addr: String,
-    /// The SSE events route path (`server.sse.path`).
-    pub sse_path: String,
     pub database_source: String,
     /// Startup gate: run pending schema migrations before seeding.
     pub database_migrate: bool,
@@ -106,54 +95,9 @@ struct JwtSection {
     #[serde(default)]
     public_key: String,
     #[serde(default)]
-    access_token_expires: String,
+    access_token_expires: Option<DurationWire>,
     #[serde(default)]
-    refresh_token_expires: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct ServerFile {
-    server: Option<ServerSection>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct ServerSection {
-    rest: Option<RestSection>,
-    sse: Option<SseSection>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct RestSection {
-    #[serde(default)]
-    addr: String,
-    #[serde(default)]
-    timeout: String,
-    #[serde(default)]
-    enable_swagger: bool,
-    #[serde(default)]
-    enable_redoc: bool,
-    #[serde(default)]
-    cors: Option<CorsSection>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-struct CorsSection {
-    #[serde(default)]
-    allow_credentials: bool,
-    #[serde(default)]
-    headers: Vec<String>,
-    #[serde(default)]
-    methods: Vec<String>,
-    #[serde(default)]
-    origins: Vec<String>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct SseSection {
-    #[serde(default)]
-    addr: String,
-    #[serde(default)]
-    path: String,
+    refresh_token_expires: Option<DurationWire>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -183,26 +127,6 @@ struct MinioSection {
     use_ssl: bool,
 }
 
-/// Parses a Go `time.ParseDuration` subset: `300s`, `1.5h`, `0.4s`, `90m`.
-fn parse_go_duration(text: &str) -> Option<f64> {
-    let text = text.trim();
-    if text.is_empty() {
-        return None;
-    }
-    let (value, unit) = text.split_at(text.find(|c: char| c.is_alphabetic())?);
-    let value: f64 = value.parse().ok()?;
-    let secs = match unit {
-        "ns" => value / 1e9,
-        "us" | "µs" => value / 1e6,
-        "ms" => value / 1e3,
-        "s" => value,
-        "m" => value * 60.0,
-        "h" => value * 3600.0,
-        _ => return None,
-    };
-    Some(secs)
-}
-
 impl Config {
     /// Loads the vendored yaml files with env overrides applied.
     pub fn load() -> Result<Self, String> {
@@ -211,20 +135,6 @@ impl Config {
         let auth: AuthFile =
             serde_yaml::from_str(AUTH_YAML).map_err(|e| format!("parse auth.yaml: {e}"))?;
         let oss: OssFile = serde_yaml::from_str(OSS_YAML).unwrap_or(OssFile { oss: None });
-        let server: ServerFile =
-            serde_yaml::from_str(SERVER_YAML).unwrap_or(ServerFile { server: None });
-        let server_section = server.server.unwrap_or_default();
-        let rest_section = server_section.rest.unwrap_or(RestSection {
-            addr: ":7788".into(),
-            timeout: String::new(),
-            enable_swagger: false,
-            enable_redoc: false,
-            cors: None,
-        });
-        let sse_section = server_section.sse.unwrap_or(SseSection {
-            addr: ":7789".into(),
-            path: "/events".into(),
-        });
 
         let data_section = data.data.unwrap_or_default();
         let database = data_section.database.unwrap_or_default();
@@ -234,8 +144,8 @@ impl Config {
             key: String::new(),
             private_key: String::new(),
             public_key: String::new(),
-            access_token_expires: String::new(),
-            refresh_token_expires: String::new(),
+            access_token_expires: None,
+            refresh_token_expires: None,
         });
 
         // The code defaults : access 15 min,
@@ -243,12 +153,20 @@ impl Config {
         let access_token_expires_secs = std::env::var("RUSHWIND_ACCESS_TOKEN_EXPIRES_SECS")
             .ok()
             .and_then(|v| v.parse().ok())
-            .or_else(|| parse_go_duration(&jwt.access_token_expires).map(|s| s as i64))
+            .or_else(|| {
+                jwt.access_token_expires
+                    .as_ref()
+                    .map(|d| d.0.as_secs() as i64)
+            })
             .unwrap_or(900);
         let refresh_token_expires_secs = std::env::var("RUSHWIND_REFRESH_TOKEN_EXPIRES_SECS")
             .ok()
             .and_then(|v| v.parse().ok())
-            .or_else(|| parse_go_duration(&jwt.refresh_token_expires).map(|s| s as i64))
+            .or_else(|| {
+                jwt.refresh_token_expires
+                    .as_ref()
+                    .map(|d| d.0.as_secs() as i64)
+            })
             .unwrap_or(7 * 24 * 3600);
 
         let minio = oss.oss.and_then(|o| o.minio).unwrap_or_default();
@@ -271,34 +189,6 @@ impl Config {
                 .or_else(|| non_empty(jwt.public_key.clone())),
             access_token_expires_secs,
             refresh_token_expires_secs,
-            rest_addr: rest_section.addr.clone(),
-            rest_timeout_secs: parse_go_duration(&rest_section.timeout)
-                .map(|s| s as u64)
-                .unwrap_or(10),
-            enable_swagger: rest_section.enable_swagger,
-            enable_redoc: rest_section.enable_redoc,
-            cors_allow_credentials: rest_section
-                .cors
-                .as_ref()
-                .map(|c| c.allow_credentials)
-                .unwrap_or(false),
-            cors_headers: rest_section
-                .cors
-                .as_ref()
-                .map(|c| c.headers.clone())
-                .unwrap_or_default(),
-            cors_methods: rest_section
-                .cors
-                .as_ref()
-                .map(|c| c.methods.clone())
-                .unwrap_or_default(),
-            cors_origins: rest_section
-                .cors
-                .as_ref()
-                .map(|c| c.origins.clone())
-                .unwrap_or_default(),
-            sse_addr: sse_section.addr.clone(),
-            sse_path: sse_section.path.clone(),
             oss: (!minio.endpoint.is_empty()).then_some(OssConfig {
                 endpoint: minio.endpoint,
                 upload_host: minio.upload,
@@ -313,24 +203,4 @@ impl Config {
 
 fn non_empty(v: String) -> Option<String> {
     (!v.is_empty()).then_some(v)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_go_duration;
-
-    #[test]
-    fn parses_plain_units() {
-        assert_eq!(parse_go_duration("300s"), Some(300.0));
-        assert_eq!(parse_go_duration("90m"), Some(5400.0));
-        assert_eq!(parse_go_duration("1.5h"), Some(5400.0));
-        assert_eq!(parse_go_duration("0.4s"), Some(0.4));
-    }
-
-    #[test]
-    fn rejects_malformed() {
-        assert_eq!(parse_go_duration(""), None);
-        assert_eq!(parse_go_duration("abc"), None);
-        assert_eq!(parse_go_duration("12q"), None);
-    }
 }

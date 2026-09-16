@@ -10,7 +10,6 @@ use crate::config::Config;
 use crate::token::{TokenStore, UserTokenPayload};
 
 pub struct AppState {
-    #[allow(dead_code)] // request-time config surface (SSE/limits land with later phases)
     pub cfg: Config,
     pub db: DatabaseConnection,
     pub redis: ConnectionManager,

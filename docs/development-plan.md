@@ -555,6 +555,31 @@ P4 收尾/验收                                    █████  (2-3M)
 >   被环境回收且用户指示未经允许不再动容器，故复跑顺延）→ golden DDL 管道 /
 >   序列化金样扩展 / SSE :7789（Phase 0 尾项）。authz-rbac 接线与
 >   access-token checker 依赖存储阶段（sys_apis / 会话表）。
+> - **会话十六（2026-09-16，装配层向框架内聚 + 端到端阳性回归）**：服务侧手写
+>   装配（CORS 循环、HttpEdge 尾段、parse_addr、server.yaml serde 镜像、
+>   Go 时长解析、静态 cron 手工挂载）全部下沉 rushwind-bootstrap：框架新增
+>   BindWire（host-any `":port"` 形式）与 DurationWire（秒数或时长串，吸收
+>   parse_go_duration 及其测试），RoutePackRef 增 verbatim `settings` 节点透传
+>   （框架提交 9f260ec，后续 4d3d524）。admin 的 server.yaml 重整为 bootstrap
+>   装配文档（app + servers[]：http/edge{cors+compat}/route_packs、admin-sse、
+>   admin-tasks 两个工厂 kind、cron 按名挂载三作业）；rest.rs 收敛为单个
+>   route pack（bind 外层 + 鉴权门内层的 per-route 线序与审计层原地保留，
+>   edge 归框架）；sse.rs/apalis.rs 改工厂注册，TaskQueue（enqueue 侧）与
+>   ApalisServer（worker 侧）共享存储句柄拆分；config.rs 只余 data/auth/oss
+>   三文件解析 + env 覆盖；rushwind-core/rushwind-http 依赖移除。框架侧顺手
+>   修复 transport-cron 真缺陷：30s ticker 相位锁定启动时刻，启动相位不在
+>   `:00/:30` 则任何作业永不触发（4d3d524，first deadline 锚定下一半分钟
+>   边界）。门禁：框架 cron/bootstrap 两 crate fmt/clippy/test 绿；admin 四门
+>   绿（fmt/clippy -D/test 40——2 个时长测试随解析器迁框架/deny ok）。端到端
+>   阳性回归（宿主 citus+redis，17 探针全过）：门控 401 信封、CORS 预检三
+>   形态（反射 ACAH/默认方法无 ACAM/越册 origin 空体 200 截断）、captcha→
+>   Redis、AES 登录 + 双 cookie、数据面 200、openapi 410KB（经 pack settings
+>   开关挂载）、SSE 四路（预检/无 token 401 文本/活性五头/越册 401+403 体）、
+>   refresh 轮换、logout 吊销 401、cron→队列→worker 全链路（插入 PERIODIC
+>   行后 `[scheduler] backup fired` 阳性）。运维事实两条：Docker Desktop 的
+>   IPv6 回环端口代理挂死（`::1:5432` 超时、`127.0.0.1` 瞬通）——宿主联调
+>   env 必须显式 IPv4，`localhost` 会被 Rust 解析优先走 ::1 导致池超时假象；
+>   另发现更名前的 `gwa-admin-server.exe` 僵尸进程占 7788/7789（已清）。
 
 1. [x] 仓库骨架 + workspace（backend/ 结构就位）；CI 已建（.github/workflows/
        ci.yml：fmt/clippy/test + protoc 安装 + sync-protos --check 门，双 OS 矩阵）。

@@ -38,6 +38,7 @@ use axum::extract::{Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
+use serde::Deserialize;
 use tokio::sync::broadcast;
 
 use crate::state::{status_error, AppState, StatusError};
@@ -245,26 +246,74 @@ pub fn publish_recipient(hub: &Hub, payload: &NotificationPayload) {
 #[allow(dead_code)]
 fn _claims_shape(_: &UserTokenPayload) {}
 
-/// Assembles the `/events` router into a transport server bound to
-/// `server.sse.addr` (default :7789), registered into the same
-/// lifecycle as REST. The route path rides `server.sse.path` when set,
-/// falling back to `/` (exact match only — the reference mux's `/`
-/// default is a catch-all prefix; unreachable while the embedded
-/// config pins `/events`).
-pub fn new_sse_server(
+/// The sse transport wire (the factory's settings node): the listener
+/// address (the standard form or the host-any `":port"` form) and the
+/// events route path. A missing node or field falls back to the
+/// defaults below.
+#[derive(Debug, Deserialize)]
+struct SseWire {
+    #[serde(default = "default_addr")]
+    addr: rushwind_bootstrap::BindWire,
+    #[serde(default = "default_path")]
+    path: String,
+}
+
+impl Default for SseWire {
+    fn default() -> Self {
+        Self {
+            addr: default_addr(),
+            path: default_path(),
+        }
+    }
+}
+
+fn default_addr() -> rushwind_bootstrap::BindWire {
+    rushwind_bootstrap::BindWire(std::net::SocketAddr::from(([0, 0, 0, 0], 7789)))
+}
+
+fn default_path() -> String {
+    "/events".to_string()
+}
+
+/// The sse transport factory: assembles the events router (the handler
+/// and its preflight under the wire's address and path — an empty path
+/// mounts `/`, exact match only; the reference mux's `/` default is a
+/// catch-all prefix, unreachable while the embedded document pins
+/// `/events`) into a lifecycle server.
+pub fn factory(
     state: std::sync::Arc<crate::state::AppState>,
-    addr: std::net::SocketAddr,
-) -> Result<rushwind_transport_axum::AxumServer, String> {
-    let path = if state.cfg.sse_path.is_empty() {
-        "/".to_string()
-    } else {
-        state.cfg.sse_path.clone()
-    };
-    let router = axum::Router::new().route(
-        path.as_str(),
-        axum::routing::get(events)
-            .options(events_preflight)
-            .with_state(state),
-    );
-    rushwind_transport_axum::AxumServer::new(addr, router).map_err(|e| format!("sse server: {e}"))
+) -> impl Fn(
+    serde_json::Value,
+    rushwind_bootstrap::RouteInput,
+) -> rushwind_bootstrap::BoxFuture<
+    'static,
+    Result<std::sync::Arc<dyn rushwind_transport::Server>, rushwind_bootstrap::BootstrapError>,
+> + Send
+       + Sync
+       + 'static {
+    move |settings, _input| {
+        let state = std::sync::Arc::clone(&state);
+        Box::pin(async move {
+            let wire = if settings.is_null() {
+                SseWire::default()
+            } else {
+                serde_json::from_value(settings).map_err(|e| {
+                    rushwind_bootstrap::BootstrapError::Config(format!("sse wire: {e}"))
+                })?
+            };
+            let path = if wire.path.is_empty() {
+                "/"
+            } else {
+                wire.path.as_str()
+            };
+            let router = axum::Router::new().route(
+                path,
+                axum::routing::get(events)
+                    .options(events_preflight)
+                    .with_state(state),
+            );
+            let server = rushwind_transport_axum::AxumServer::new(wire.addr.0, router)?;
+            Ok(std::sync::Arc::new(server) as std::sync::Arc<dyn rushwind_transport::Server>)
+        })
+    }
 }

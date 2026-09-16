@@ -1,11 +1,13 @@
-//! ApalisServer
-//! as a proper lifecycle transport: an apalis worker over the
-//! `rushwind-apalis-postgres` storage (Postgres queue table instead of
-//! Redis lists — same push/claim/ack shape, framework-native). The
-//! scheduler (`crate::scheduler`) is the cron **producer** that enqueues
-//! due jobs; this server is the **consumer** that claims and executes
-//! them, registered into the same App lifecycle as REST + SSE.
-
+//! The task-queue transport pair, both wired as lifecycle transports
+//! through the assembler's factory and cron-job registries:
+//! * the worker — claims and executes queued jobs over the queue
+//!   storage (`rushwind-apalis-postgres`, a Postgres queue table with
+//!   the same push/claim/ack shape, framework-native);
+//! * the enqueue side — the shared storage handle the cron producer's
+//!   periodic wildcard pushes through.
+//!
+//! The producer itself (the two system crons plus the DB-driven
+//! wildcard) registers as cron jobs by name.
 use std::sync::Arc;
 
 use apalis_core::backend::Backend;
@@ -30,29 +32,31 @@ struct Job {
     payload: serde_json::Value,
 }
 
-pub struct ApalisServer {
-    state: Arc<AppState>,
+/// The enqueue side: the shared queue-storage handle. The worker claims
+/// from the same storage; the cron producer's periodic wildcard pushes
+/// through this side.
+pub struct TaskQueue {
     storage: PostgresStorage<String>,
-    queue: String,
+    queue_name: String,
 }
 
-impl ApalisServer {
-    /// Builds the worker-side storage over the `queue` (default queue).
-    /// The queue table itself is created idempotently in `start`.
-    pub fn new(state: Arc<AppState>, dsn: &str, queue: &str) -> Result<Self, String> {
+impl TaskQueue {
+    /// Builds the queue storage over the `queue` (default queue). The
+    /// queue table itself is created idempotently in the worker's
+    /// start.
+    pub fn new(dsn: &str, queue: &str) -> Result<Self, String> {
         let storage = PostgresStorage::<String>::from_settings(json!({
             "url": dsn,
             "queue": queue,
         }))
         .map_err(|e| format!("apalis storage: {e}"))?;
         Ok(Self {
-            state,
             storage,
-            queue: queue.to_string(),
+            queue_name: queue.to_string(),
         })
     }
 
-    /// Enqueues a job (the scheduler's producer side).
+    /// Enqueues a job (the producer side).
     pub async fn enqueue(&self, type_name: &str, payload: serde_json::Value) -> Result<(), String> {
         let job = json!({ "type": type_name, "payload": payload }).to_string();
         let mut storage = self.storage.clone();
@@ -61,6 +65,20 @@ impl ApalisServer {
             .await
             .map_err(|e| format!("apalis push: {e}"))?;
         Ok(())
+    }
+}
+
+/// The worker transport: claims queued jobs from the shared queue
+/// storage and executes their handlers.
+pub struct ApalisServer {
+    state: Arc<AppState>,
+    queue: Arc<TaskQueue>,
+}
+
+impl ApalisServer {
+    /// Wraps the shared queue-storage handle.
+    pub fn new(state: Arc<AppState>, queue: Arc<TaskQueue>) -> Self {
+        Self { state, queue }
     }
 
     /// The task handlers (module registrations).
@@ -111,18 +129,18 @@ impl ApalisServer {
 #[async_trait::async_trait]
 impl Server for ApalisServer {
     fn endpoint(&self) -> Result<String, ServerError> {
-        Ok(format!("apalis-postgres://{}", self.queue))
+        Ok(format!("apalis-postgres://{}", self.queue.queue_name))
     }
 
     fn start(&self, stop: StopSignal) -> ServerFuture<'_> {
         Box::pin(async move {
-            PostgresStorage::<()>::setup(self.storage.pool())
+            PostgresStorage::<()>::setup(self.queue.storage.pool())
                 .await
                 .map_err(|e| ServerError::Failed(format!("apalis setup: {e}")))?;
 
             let worker = Worker::new(WorkerId::new("admin-task-worker"), WorkerContext::default());
             worker.start();
-            let poller = self.storage.clone().poll(&worker);
+            let poller = self.queue.storage.clone().poll(&worker);
             tokio::spawn(poller.heartbeat);
             let mut stream = poller.stream;
 
@@ -143,7 +161,7 @@ impl Server for ApalisServer {
                                     false
                                 }
                             };
-                            let mut acker = self.storage.clone();
+                            let mut acker = self.queue.storage.clone();
                             let res = if ok {
                                 Response::success(
                                     (),
@@ -176,64 +194,80 @@ impl Server for ApalisServer {
     }
 }
 
+/// The worker factory: the task-queue consumer transport. The storage
+/// handle is pre-built by the assembly entry; the factory wraps it.
+pub fn worker_factory(
+    state: Arc<AppState>,
+    queue: Arc<TaskQueue>,
+) -> impl Fn(
+    serde_json::Value,
+    rushwind_bootstrap::RouteInput,
+) -> rushwind_bootstrap::BoxFuture<
+    'static,
+    Result<std::sync::Arc<dyn rushwind_transport::Server>, rushwind_bootstrap::BootstrapError>,
+> + Send
+       + Sync
+       + 'static {
+    move |_settings, _input| {
+        let state = Arc::clone(&state);
+        let queue = Arc::clone(&queue);
+        Box::pin(async move {
+            Ok(Arc::new(ApalisServer::new(state, queue))
+                as std::sync::Arc<dyn rushwind_transport::Server>)
+        })
+    }
+}
+
 // ---------------------------------------------------------------------------
-// The cron producer: static system crons are
-// registered directly; the DB-driven PERIODIC rows ride a wildcard job
-// whose handler scans `sys_tasks` each minute, matches specs, dedupes by
-// type name across tenants, and enqueues.
+// The cron producer: the two static system crons are registered
+// directly; the DB-driven PERIODIC rows ride a wildcard job whose
+// handler scans `sys_tasks` each tick, so ControlTask/Update/Delete
+// take effect without a restart.
 // ---------------------------------------------------------------------------
 
-/// Builds the cron transport wired to this server's enqueue side.
-pub fn cron_server(
+/// Builds the cron producer registrations: the static system crons and
+/// the DB-driven PERIODIC wildcard, keyed by their registered names.
+pub fn cron_jobs(
     state: Arc<AppState>,
-    tasks: Arc<ApalisServer>,
-) -> rushwind_transport_cron::CronServer {
-    use rushwind_transport_cron::{CronJob, CronServer, CronSpec};
+    queue: Arc<TaskQueue>,
+) -> Vec<(&'static str, rushwind_transport_cron::CronJob)> {
+    use rushwind_transport_cron::{CronJob, CronSpec};
 
     fn spec(spec: &str) -> CronSpec {
         CronSpec::parse(spec).expect("static cron spec parses")
     }
 
     // System crons.
-    let server = CronServer::new("cron://admin")
-        .with_job(CronJob::new("tenant_expiry_scan", spec("0 * * * *"), {
+    let tenant_expiry_scan = CronJob::new("tenant_expiry_scan", spec("0 * * * *"), {
+        let state = Arc::clone(&state);
+        move || {
             let state = Arc::clone(&state);
-            move || {
-                let state = Arc::clone(&state);
-                Box::pin(async move {
-                    ApalisServer::run_handler(
-                        &state.db,
-                        "tenant_expiry_scan",
-                        &serde_json::json!({}),
-                    )
+            Box::pin(async move {
+                ApalisServer::run_handler(&state.db, "tenant_expiry_scan", &serde_json::json!({}))
                     .await;
-                })
-            }
-        }))
-        .with_job(CronJob::new("audit_log_archive", spec("30 3 * * *"), {
+            })
+        }
+    });
+    let audit_log_archive = CronJob::new("audit_log_archive", spec("30 3 * * *"), {
+        let state = Arc::clone(&state);
+        move || {
             let state = Arc::clone(&state);
-            move || {
-                let state = Arc::clone(&state);
-                Box::pin(async move {
-                    ApalisServer::run_handler(
-                        &state.db,
-                        "audit_log_archive",
-                        &serde_json::json!({}),
-                    )
+            Box::pin(async move {
+                ApalisServer::run_handler(&state.db, "audit_log_archive", &serde_json::json!({}))
                     .await;
-                })
-            }
-        }));
+            })
+        }
+    });
 
     // The wildcard job: DB-driven PERIODIC rows. The handler re-reads
     // `sys_tasks` each tick, so ControlTask/Update/Delete take effect
     // without a restart.
-    server.with_job(CronJob::new("sys_tasks_periodic", spec("* * * * *"), {
+    let sys_tasks_periodic = CronJob::new("sys_tasks_periodic", spec("* * * * *"), {
         let state = Arc::clone(&state);
-        let tasks = Arc::clone(&tasks);
+        let queue = Arc::clone(&queue);
         move || {
             let state = Arc::clone(&state);
-            let tasks = Arc::clone(&tasks);
+            let queue = Arc::clone(&queue);
             Box::pin(async move {
                 use chrono::Timelike as _;
                 use sea_orm::{ColumnTrait as _, EntityTrait as _, QueryFilter as _};
@@ -268,9 +302,15 @@ pub fn cron_server(
                         .as_ref()
                         .cloned()
                         .unwrap_or_else(|| serde_json::json!({}));
-                    let _ = tasks.enqueue(&row.type_name, payload).await;
+                    let _ = queue.enqueue(&row.type_name, payload).await;
                 }
             })
         }
-    }))
+    });
+
+    vec![
+        ("tenant_expiry_scan", tenant_expiry_scan),
+        ("audit_log_archive", audit_log_archive),
+        ("sys_tasks_periodic", sys_tasks_periodic),
+    ]
 }

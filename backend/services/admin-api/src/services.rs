@@ -48,7 +48,7 @@ pub use dashboard::DashboardService;
 pub use data_access_audit_log::DataAccessAuditLogService;
 pub use dict_entry::DictEntryService;
 pub use dict_type::DictTypeService;
-pub use file::{FileService, FileTransferService};
+pub use file::{image_proxy, FileService, FileTransferService};
 pub use internal_message::{
     InternalMessageCategoryService, InternalMessageRecipientService, InternalMessageService,
 };

@@ -116,9 +116,9 @@ struct MinioSection {
     #[serde(default)]
     endpoint: String,
     #[serde(default)]
-    upload: String,
+    upload_host: String,
     #[serde(default)]
-    download: String,
+    download_host: String,
     #[serde(default)]
     access_key: String,
     #[serde(default)]
@@ -169,7 +169,13 @@ impl Config {
             })
             .unwrap_or(7 * 24 * 3600);
 
-        let minio = oss.oss.and_then(|o| o.minio).unwrap_or_default();
+        let mut minio = oss.oss.and_then(|o| o.minio).unwrap_or_default();
+        // Host-side runs reach the published port, not the network alias.
+        if let Ok(host_endpoint) = std::env::var("RUSHWIND_OSS_ENDPOINT") {
+            if !host_endpoint.is_empty() {
+                minio.endpoint = host_endpoint;
+            }
+        }
 
         Ok(Config {
             database_source: std::env::var("RUSHWIND_DATABASE_SOURCE").unwrap_or(database.source),
@@ -191,8 +197,8 @@ impl Config {
             refresh_token_expires_secs,
             oss: (!minio.endpoint.is_empty()).then_some(OssConfig {
                 endpoint: minio.endpoint,
-                upload_host: minio.upload,
-                download_host: minio.download,
+                upload_host: minio.upload_host,
+                download_host: minio.download_host,
                 access_key: minio.access_key,
                 secret_key: minio.secret_key,
                 use_ssl: minio.use_ssl,

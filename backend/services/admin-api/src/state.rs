@@ -20,6 +20,26 @@ pub struct AppState {
     pub tokens: TokenStore,
     /// The SSE notification hub (`/events` subscribers).
     pub hub: crate::server::sse::Hub,
+    /// The object-storage engines, one per content bucket, present when
+    /// `oss.yaml` carries a MinIO section.
+    pub oss: Option<OssBuckets>,
+}
+
+/// The five content buckets the file service routes objects into, all
+/// on the same MinIO endpoint.
+pub struct OssBuckets {
+    pub buckets: std::collections::HashMap<&'static str, Arc<dyn rushwind_oss::ObjectStorage>>,
+    pub upload_host: String,
+    pub download_host: String,
+}
+
+impl OssBuckets {
+    pub const NAMES: [&'static str; 5] = ["images", "videos", "audios", "docs", "files"];
+
+    /// The engine for a MIME-derived bucket name.
+    pub fn storage(&self, bucket: &str) -> Option<Arc<dyn rushwind_oss::ObjectStorage>> {
+        self.buckets.get(bucket).cloned()
+    }
 }
 
 impl AppState {
@@ -67,6 +87,43 @@ impl AppState {
             cfg.refresh_token_expires_secs,
         );
 
+        // The object-storage engines: one per content bucket over the
+        // MinIO section of oss.yaml (path-style addressing — the MinIO
+        // requirement). Bucket creation is best-effort here; an
+        // already-owned bucket answers conflict and is fine.
+        let oss = match cfg.oss.as_ref() {
+            Some(oss) => {
+                let mut buckets = std::collections::HashMap::new();
+                for name in OssBuckets::NAMES {
+                    let engine = rushwind_oss_s3::S3Storage::new(rushwind_oss::StorageConfig {
+                        endpoint: oss.endpoint.clone(),
+                        region: "us-east-1".to_string(),
+                        access_key: oss.access_key.clone(),
+                        secret_key: oss.secret_key.clone(),
+                        token: None,
+                        use_ssl: oss.use_ssl,
+                        force_path_style: true,
+                        bucket: name.to_string(),
+                    })
+                    .map_err(|e| format!("oss storage {name}: {e}"))?;
+                    // Idempotent bootstrap: an already-owned bucket
+                    // answers conflict — any failure here defers to
+                    // the first put.
+                    let _ = engine.create_bucket().await;
+                    buckets.insert(
+                        name,
+                        Arc::new(engine) as Arc<dyn rushwind_oss::ObjectStorage>,
+                    );
+                }
+                Some(OssBuckets {
+                    buckets,
+                    upload_host: oss.upload_host.clone(),
+                    download_host: oss.download_host.clone(),
+                })
+            }
+            None => None,
+        };
+
         Ok(Self {
             cfg,
             db,
@@ -75,6 +132,7 @@ impl AppState {
             jwt,
             tokens,
             hub: crate::server::sse::Hub::default(),
+            oss,
         })
     }
 }

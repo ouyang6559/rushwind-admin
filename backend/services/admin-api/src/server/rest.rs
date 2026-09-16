@@ -468,6 +468,17 @@ pub fn build_router(state: Arc<AppState>, docs: crate::server::docs::Wire) -> ax
         docs.enable_redoc,
     ));
 
+    // The signed public image proxy: public by design — the HMAC in
+    // the query is the credential — so it mounts without the gate,
+    // mirroring the reference's raw (Operation-less) route.
+    let image_proxy = axum::Router::new()
+        .route(
+            "/admin/v1/file/image",
+            axum::routing::get(crate::services::image_proxy),
+        )
+        .with_state(Arc::clone(&state));
+    app = app.merge(image_proxy);
+
     // The audit-write layer:
     // post-handler persistence into the audit tables, outermost so it
     // sees final status codes.

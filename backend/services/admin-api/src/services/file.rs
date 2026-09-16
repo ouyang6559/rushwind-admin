@@ -115,6 +115,120 @@ fn bucket_for_mime(mime: &str) -> &'static str {
     }
 }
 
+/// Content sniffing over the leading magic bytes — the upload path
+/// trusts the bytes, not the client-declared mime, so the bucket route
+/// cannot be bypassed by a relabelled payload. `None` defers to the
+/// client declaration.
+fn sniff_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Some("image/png");
+    }
+    if bytes.starts_with(b"\xff\xd8\xff") {
+        return Some("image/jpeg");
+    }
+    if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        return Some("image/gif");
+    }
+    if bytes.len() > 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        return Some("image/webp");
+    }
+    if bytes.starts_with(b"%PDF") {
+        return Some("application/pdf");
+    }
+    if bytes.starts_with(b"PK\x03\x04") {
+        return Some("application/zip");
+    }
+    if bytes.len() > 12 && &bytes[4..8] == b"ftyp" {
+        return Some("video/mp4");
+    }
+    if bytes.starts_with(b"ID3") || (bytes.len() > 1 && bytes[0] == 0xFF && bytes[1] & 0xE0 == 0xE0)
+    {
+        return Some("audio/mpeg");
+    }
+    None
+}
+
+/// The signed public media URL (`/admin/v1/file/image`): HMAC-SHA256
+/// over `path|expires` under the crypto key; unset key yields an empty
+/// URL (the reference behavior — rich-text embedding degrades, the
+/// authorized download API still works).
+fn signed_media_url(crypto_key: Option<[u8; 32]>, storage_path: &str) -> String {
+    let Some(key) = crypto_key else {
+        return String::new();
+    };
+    let expires = chrono::Utc::now().timestamp() + 365 * 24 * 3600;
+    let data = format!("{storage_path}|{expires}");
+    use hmac::Mac as _;
+    let mut mac =
+        hmac::Hmac::<sha2::Sha256>::new_from_slice(&key).expect("hmac accepts any key length");
+    mac.update(data.as_bytes());
+    let sig = hex::encode(mac.finalize().into_bytes());
+    format!("/admin/v1/file/image?path={storage_path}&expires={expires}&sig={sig}")
+}
+
+/// The signature image proxy — a public route whose credential is the
+/// HMAC: verify expiry then signature, stream the object from the
+/// bucket the path names.
+pub async fn image_proxy(
+    axum::extract::State(state): axum::extract::State<Arc<AppState>>,
+    params: axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+
+    let bad = |code: u16, text: &'static str| async move {
+        (
+            axum::http::StatusCode::from_u16(code).unwrap_or(axum::http::StatusCode::BAD_REQUEST),
+            text,
+        )
+            .into_response()
+    };
+    let path = params.get("path").cloned().unwrap_or_default();
+    let expires = params.get("expires").cloned().unwrap_or_default();
+    let sig = params.get("sig").cloned().unwrap_or_default();
+    if path.is_empty() || expires.is_empty() || sig.is_empty() {
+        return bad(400, "missing parameters").await;
+    }
+    let Ok(expires_at) = expires.parse::<i64>() else {
+        return bad(403, "url expired").await;
+    };
+    if chrono::Utc::now().timestamp() > expires_at {
+        return bad(403, "url expired").await;
+    }
+    let Some(key) = crate::crypto::crypto_key() else {
+        return bad(403, "invalid signature").await;
+    };
+    use hmac::Mac as _;
+    let mut mac =
+        hmac::Hmac::<sha2::Sha256>::new_from_slice(&key).expect("hmac accepts any key length");
+    mac.update(format!("{path}|{expires}").as_bytes());
+    if hex::encode(mac.finalize().into_bytes()) != sig {
+        return bad(403, "invalid signature").await;
+    }
+
+    // "/bucket/object" — the bucket routes to its engine.
+    let media = path.trim_start_matches('/');
+    let Some((bucket, object)) = media.split_once('/') else {
+        return bad(400, "invalid path").await;
+    };
+    let Some(oss) = state.oss.as_ref().and_then(|o| o.storage(bucket)) else {
+        return bad(404, "not found").await;
+    };
+    match oss.get(object).await {
+        Ok(bytes) => {
+            let ext = object.rsplit('.').next().unwrap_or("");
+            let mime = match ext {
+                "png" => "image/png",
+                "jpg" | "jpeg" => "image/jpeg",
+                "gif" => "image/gif",
+                "webp" => "image/webp",
+                _ => "application/octet-stream",
+            };
+            ([(axum::http::header::CONTENT_TYPE, mime)], bytes).into_response()
+        }
+        Err(_) => bad(404, "not found").await,
+    }
+}
+
 pub struct FileService {
     pub state: Arc<AppState>,
 }
@@ -227,9 +341,17 @@ impl proto::gen::services::FileServiceHandlers for FileService {
             .await
             .map_err(db_err)?
             .ok_or_else(|| not_found("file"))?;
-        // Physical object removal (best-effort on the local mirror).
-        if let (Some(dir), Some(name)) = (&row.file_directory, &row.save_file_name) {
-            let path = format!("./data/files/{dir}/{name}");
+        // Physical object removal (best-effort on either store).
+        let bucket = row.bucket_name.clone().unwrap_or_else(|| "files".into());
+        let mut object_key = row.file_directory.clone().unwrap_or_default();
+        if !object_key.is_empty() {
+            object_key.push('/');
+        }
+        object_key.push_str(row.save_file_name.as_deref().unwrap_or_default());
+        if let Some(oss) = self.state.oss.as_ref().and_then(|o| o.storage(&bucket)) {
+            let _ = oss.delete(&object_key).await;
+        } else {
+            let path = format!("./data/files/{bucket}/{object_key}");
             let _ = std::fs::remove_file(path);
         }
         crate::data::files::Entity::delete_by_id(row.id)
@@ -273,12 +395,29 @@ impl FileTransferService {
                 "file exceeds the 50MiB upload limit",
             ));
         }
-        let client_mime = req.mime.clone().unwrap_or_default();
-        if !mime_allowed(&client_mime) {
+        let mut mime = req.mime.clone().unwrap_or_default();
+        if mime.is_empty() {
+            return Err(status_error("BAD_REQUEST", "unknown mime type"));
+        }
+        if req
+            .source_file_name
+            .as_deref()
+            .map(str::is_empty)
+            .unwrap_or(true)
+        {
+            return Err(status_error("BAD_REQUEST", "unknown source file name"));
+        }
+        if !mime_allowed(&mime) {
             return Err(status_error(
                 "BAD_REQUEST",
-                format!("mime type [{client_mime}] is not allowed"),
+                format!("mime type [{mime}] is not allowed"),
             ));
+        }
+        // The bytes decide the type, not the client declaration — the
+        // sniffed type overrides so the bucket route cannot be bypassed
+        // by a relabelled payload.
+        if let Some(sniffed) = sniff_mime(&bytes) {
+            mime = sniffed.to_string();
         }
         let dir = storage_object
             .file_directory
@@ -295,16 +434,39 @@ impl FileTransferService {
             .unwrap_or_else(|| "bin".into());
         let guid = uuid::Uuid::now_v7().simple().to_string();
         let save_name = format!("{guid}.{ext}");
-        let bucket = bucket_for_mime(&client_mime);
-
-        // Local object mirror (MinIO rides rushwind-oss when configured).
-        let object_dir = format!("./data/files/{bucket}/{dir}");
-        std::fs::create_dir_all(&object_dir)
-            .map_err(|e| internal_error(format!("storage mkdir: {e}")))?;
-        let object_path = format!("{object_dir}/{save_name}");
-        std::fs::write(&object_path, &bytes)
-            .map_err(|e| internal_error(format!("storage write: {e}")))?;
+        let bucket = bucket_for_mime(&mime);
         let object_name = format!("{dir}/{save_name}");
+
+        // The object store: MinIO when configured (the URL shapes the
+        // reference pins — link carries the download host), else the
+        // local mirror with identical metadata semantics.
+        let (link_url, public_url) = match self.state.oss.as_ref() {
+            Some(oss) => {
+                let storage = oss
+                    .storage(bucket)
+                    .ok_or_else(|| internal_error("storage engine missing"))?;
+                storage
+                    .put(&object_name, &bytes, Some(mime.as_str()))
+                    .await
+                    .map_err(|e| internal_error(format!("storage put: {e}")))?;
+                let download_url = format!(
+                    "{}/{bucket}/{object_name}",
+                    oss.download_host.trim_end_matches('/')
+                );
+                let storage_path = format!("/{bucket}/{object_name}");
+                let public_url = signed_media_url(crate::crypto::crypto_key(), &storage_path);
+                (download_url, public_url)
+            }
+            None => {
+                let object_dir = format!("./data/files/{bucket}/{dir}");
+                std::fs::create_dir_all(&object_dir)
+                    .map_err(|e| internal_error(format!("storage mkdir: {e}")))?;
+                let object_path = format!("{object_dir}/{save_name}");
+                std::fs::write(&object_path, &bytes)
+                    .map_err(|e| internal_error(format!("storage write: {e}")))?;
+                (object_name.clone(), String::new())
+            }
+        };
 
         let row = crate::data::files::ActiveModel {
             tenant_id: Set(Some(payload.tenant_id)),
@@ -317,7 +479,7 @@ impl FileTransferService {
             extension: Set(Some(ext)),
             size: Set(Some(bytes.len() as i64)),
             size_format: Set(Some(human_size(bytes.len() as u64))),
-            link_url: Set(Some(object_name.clone())),
+            link_url: Set(Some(link_url)),
             content_hash: Set(Some(hash)),
             created_by: Set(Some(payload.user_id)),
             created_at: Set(Some(crate::data::now())),
@@ -329,9 +491,9 @@ impl FileTransferService {
         .map_err(db_err)?;
 
         Ok(UploadFileResponse {
-            object_name: Some(object_name),
+            object_name: Some(row.link_url.clone().unwrap_or_default()),
             presigned_url: None,
-            public_url: Some(format!("/admin/v1/file/download?file_id={}", row.id)),
+            public_url: Some(public_url),
         })
     }
 }
@@ -383,14 +545,30 @@ impl proto::gen::services::FileTransferServiceHandlers for FileTransferService {
             None => None,
         }
         .ok_or_else(|| not_found("file"))?;
-        let path = format!(
-            "./data/files/{}/{}/{}",
-            row.bucket_name.clone().unwrap_or_else(|| "files".into()),
-            row.file_directory.clone().unwrap_or_default(),
-            row.save_file_name.clone().unwrap_or_default()
-        );
-        let bytes =
-            std::fs::read(&path).map_err(|e| internal_error(format!("storage read: {e}")))?;
+        let bucket = row.bucket_name.clone().unwrap_or_else(|| "files".into());
+        let mut object_key = row.file_directory.clone().unwrap_or_default();
+        if !object_key.is_empty() {
+            object_key.push('/');
+        }
+        object_key.push_str(row.save_file_name.as_deref().unwrap_or_default());
+        let (bytes, storage_path) = match self.state.oss.as_ref() {
+            Some(oss) => {
+                let storage = oss
+                    .storage(&bucket)
+                    .ok_or_else(|| internal_error("storage engine missing"))?;
+                let bytes = storage
+                    .get(&object_key)
+                    .await
+                    .map_err(|e| internal_error(format!("storage get: {e}")))?;
+                (bytes, format!("/{bucket}/{object_key}"))
+            }
+            None => {
+                let path = format!("./data/files/{bucket}/{object_key}");
+                let bytes = std::fs::read(&path)
+                    .map_err(|e| internal_error(format!("storage read: {e}")))?;
+                (bytes, path)
+            }
+        };
         let mime = match row.extension.as_deref() {
             Some("png") => "image/png",
             Some("jpg") | Some("jpeg") => "image/jpeg",
@@ -404,7 +582,7 @@ impl proto::gen::services::FileTransferServiceHandlers for FileTransferService {
             mime: mime.into(),
             size: bytes.len() as i64,
             checksum: row.content_hash.clone().unwrap_or_default(),
-            storage_path: path.clone(),
+            storage_path,
             updated_at: row.updated_at.and_then(crate::state::naive_to_ts),
             content: Some(
                 proto::proto::storage::service::v1::download_file_response::Content::File(bytes),

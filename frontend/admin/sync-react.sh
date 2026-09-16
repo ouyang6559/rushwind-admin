@@ -42,13 +42,33 @@ upstream_hash() {
 }
 
 # 对一个树生成排序 sha256 清单（路径 + 字节哈希，无任何归一化）。
-# 剪枝 node_modules/dist：不入库的构建产物，不参与快照清单与校验。
+#
+# 哈希宇宙 = 树上现有文件 − git 忽略路径。忽略路径（.gitignore：node_modules/
+# dist/.vite 等）永远不会出现在 CI 的 checkout 里——本地 dev server 会在快照内
+# 落构建缓存（.vite/deps），且 sync 的目录清空在句柄被握住时静默失败，残留缓存
+# 若被哈希进清单就是"本地过、CI 挂"。git 不可用时硬失败，宁可挂门也不放水。
+# 剪枝 node_modules/dist：不入库的构建产物，git 亦忽略之，此处剪枝纯为省扫描。
 hash_tree() {
   (
     cd "$1" || exit 1
-    find . -type d \( -name node_modules -o -name dist \) -prune \
-      -o -type f -print0 | sort -z | while IFS= read -r -d '' f; do
-      printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "${f#./}"
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+      echo "ERROR: $1 is not a git work tree; cannot exclude ignored paths" >&2
+      exit 1
+    }
+    candidates=()
+    while IFS= read -r -d '' f; do candidates+=("$f"); done < <(
+      find . -type d \( -name node_modules -o -name dist \) -prune \
+        -o -type f -print0 | sed -z 's|^\./||' | sort -z
+    )
+    ((${#candidates[@]})) || exit 0
+    declare -A ignored=()
+    while IFS= read -r -d '' f; do ignored["$f"]=1; done < <(
+      printf '%s\0' "${candidates[@]}" | git check-ignore --stdin -z 2>/dev/null || true
+    )
+    for f in "${candidates[@]}"; do
+      [[ -n "${ignored[$f]:-}" ]] && continue
+      [[ -f "$f" ]] || continue
+      printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"
     done
   )
 }
@@ -76,8 +96,12 @@ case "$MODE" in
   --check)
     status=0
     # 防手改门：快照终态必须与 MANIFEST 逐字节一致（多余/缺失/改动都算失败）。
-    if ! diff -u "$MANIFEST" <(hash_tree "$DST") >/dev/null; then
+    # 失败时打印差异前 40 行：与 sync-protos.sh 对齐，静默吞 diff 只会浪费排查。
+    if d="$(diff -u "$MANIFEST" <(hash_tree "$DST") 2>&1)"; then
+      echo "OK: frontend/admin/react/ matches react.MANIFEST.sha256"
+    else
       echo "ERROR: frontend/admin/react/ does not match react.MANIFEST.sha256 (hand-edit? run sync-react.sh to rebuild)" >&2
+      printf '%s\n' "$d" | head -40 >&2 || true
       status=1
     fi
     # 漂移检测：源仓在时对比上游基线（CI 无源仓时自跳过）。
@@ -86,6 +110,8 @@ case "$MODE" in
         echo "WARNING: upstream react source has drifted from the baseline; re-run sync-react.sh to accept" >&2
         [[ $status -eq 0 ]] && status=2
       fi
+    else
+      echo "WARNING: upstream react source not present; drift check skipped" >&2
     fi
     exit $status
     ;;

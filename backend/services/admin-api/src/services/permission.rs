@@ -350,8 +350,7 @@ impl proto::gen::services::PermissionServiceHandlers for PermissionService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListPermissionResponse, StatusError> {
-        let repo =
-            crate::data::repos::PermissionRepo::new(&self.state.db, crate::data::Viewer::system());
+        let repo = crate::data::repos::PermissionRepo::new(&self.state.db);
         let (rows, total) = repo.paged_list(&req).await?;
         let mut items = Vec::with_capacity(rows.len());
         for r in rows {

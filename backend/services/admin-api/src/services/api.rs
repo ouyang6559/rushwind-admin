@@ -101,7 +101,7 @@ impl proto::gen::services::ApiServiceHandlers for ApiService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListApiResponse, StatusError> {
-        let repo = crate::data::repos::ApiRepo::new(&self.state.db, crate::data::Viewer::system());
+        let repo = crate::data::repos::ApiRepo::new(&self.state.db);
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListApiResponse {
             items: rows.into_iter().map(api_proto).collect(),

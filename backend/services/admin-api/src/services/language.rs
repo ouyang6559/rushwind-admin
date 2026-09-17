@@ -41,8 +41,7 @@ impl proto::gen::services::LanguageServiceHandlers for LanguageService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListLanguageResponse, StatusError> {
-        let repo =
-            crate::data::repos::LanguageRepo::new(&self.state.db, crate::data::Viewer::system());
+        let repo = crate::data::repos::LanguageRepo::new(&self.state.db);
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListLanguageResponse {
             items: rows.into_iter().map(language_proto).collect(),

@@ -4,17 +4,19 @@
 //!
 //! The full repo surface is the data-layer API.
 
-/// The uniform repository shell: connection + viewer state, the table
-/// predicate, and the two listing envelopes. Repo-specific methods live
-/// in the file's own `impl` block beside the invocation.
+/// The uniform repository shell: connection state, the table predicate,
+/// and the two listing envelopes. Repo-specific methods live in the
+/// file's own `impl` block beside the invocation.
 ///
 /// * `tenant` arm — the tenancy predicate from the viewer (tenant
 ///   viewers constrained, platform/system wide);
-/// * `global` arm — platform-global tables, no tenant predicate.
+/// * `global` arm — platform-global tables, no tenant predicate and no
+///   viewer state at all.
 ///
-/// Paths resolve at the expansion site — repo files keep importing
-/// `Condition`, `ColumnTrait`, `DatabaseConnection`, `EntityTrait`,
-/// `QueryFilter`, `Viewer`, `db_err` and `StatusError`.
+/// Paths resolve at the expansion site — tenant-arm repo files keep
+/// importing `Condition`, `ColumnTrait`, `DatabaseConnection`,
+/// `EntityTrait`, `QueryFilter`, `Viewer`, `db_err` and `StatusError`;
+/// global-arm files need the same set minus `ColumnTrait` and `Viewer`.
 macro_rules! repo_shell {
     (tenant $name:ident, $entity:ident) => {
         pub struct $name<'a> {
@@ -62,12 +64,11 @@ macro_rules! repo_shell {
     (global $name:ident, $entity:ident) => {
         pub struct $name<'a> {
             pub db: &'a DatabaseConnection,
-            pub viewer: Viewer,
         }
 
         impl<'a> $name<'a> {
-            pub fn new(db: &'a DatabaseConnection, viewer: Viewer) -> Self {
-                Self { db, viewer }
+            pub fn new(db: &'a DatabaseConnection) -> Self {
+                Self { db }
             }
 
             // Platform-global table: no tenant predicate applies.
@@ -116,6 +117,7 @@ mod mfa_factor;
 mod notification_channel;
 mod org_unit;
 mod permission;
+mod permission_group;
 mod plan;
 mod position;
 mod role;
@@ -140,6 +142,7 @@ pub use message::InternalMessageRepo;
 pub use notification_channel::NotificationChannelRepo;
 pub use org_unit::OrgUnitRepo;
 pub use permission::PermissionRepo;
+pub use permission_group::PermissionGroupRepo;
 pub use plan::PlanModuleRepo;
 pub use plan::PlanQuotaRepo;
 pub use plan::PlanRepo;

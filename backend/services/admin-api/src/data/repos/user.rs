@@ -41,6 +41,23 @@ impl<'a> UserRepo<'a> {
         }
     }
 
+    /// Paged listing within one explicit tenant, newest first:
+    /// returns (rows, total).
+    pub async fn paged_list(
+        &self,
+        tenant_id: u32,
+        req: &proto::proto::pagination::PagingRequest,
+    ) -> Result<(Vec<users::Model>, u64), StatusError> {
+        crate::paging::fetch_paged(
+            self.db,
+            users::Entity::find()
+                .filter(users::Column::TenantId.eq(tenant_id))
+                .order_by_desc(users::Column::CreatedAt),
+            req,
+        )
+        .await
+    }
+
     pub async fn count(&self) -> u64 {
         users::Entity::find()
             .filter(self.tenant_condition())

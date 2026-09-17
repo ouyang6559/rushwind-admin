@@ -14,11 +14,6 @@ use proto::proto::pagination::PagingRequest;
 
 use crate::state::{db_err, StatusError};
 
-/// The resolved page slice.
-pub struct Paging {
-    pub no_paging: bool,
-}
-
 /// Column kind guesses for value binding (filter values arrive as JSON
 /// strings; PG needs matching literal types).
 #[derive(Clone, Copy, PartialEq)]
@@ -215,7 +210,7 @@ where
         // count() clears ordering internally, so a pre-sorted base is safe.
         Some(base.clone().count(db).await.map_err(db_err)?)
     };
-    let (paged, _) = apply(base, req);
+    let paged = apply(base, req);
     let rows = paged.all(db).await.map_err(db_err)?;
     let total = total.unwrap_or(rows.len() as u64);
     Ok((rows, total))
@@ -223,7 +218,7 @@ where
 
 /// Applies the PagingRequest to a select: filter conditions, ordering
 /// (falling back to `id`) and page slicing.
-pub fn apply<E>(mut select: Select<E>, req: &PagingRequest) -> (Select<E>, Paging)
+fn apply<E>(mut select: Select<E>, req: &PagingRequest) -> Select<E>
 where
     E: sea_orm::EntityTrait,
 {
@@ -291,5 +286,5 @@ where
         select = select.offset(offset).limit(limit);
     }
 
-    (select, Paging { no_paging })
+    select
 }

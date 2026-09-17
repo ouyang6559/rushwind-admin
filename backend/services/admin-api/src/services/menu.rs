@@ -145,7 +145,7 @@ impl proto::gen::services::MenuServiceHandlers for MenuService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListMenuResponse, StatusError> {
-        let repo = crate::data::repos::MenuRepo::new(&self.state.db, crate::data::Viewer::system());
+        let repo = crate::data::repos::MenuRepo::new(&self.state.db);
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListMenuResponse {
             items: rows.into_iter().map(menu_proto).collect(),

@@ -57,10 +57,7 @@ impl proto::gen::services::NotificationChannelServiceHandlers for NotificationCh
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListNotificationChannelResponse, StatusError> {
-        let repo = crate::data::repos::NotificationChannelRepo::new(
-            &self.state.db,
-            crate::data::Viewer::system(),
-        );
+        let repo = crate::data::repos::NotificationChannelRepo::new(&self.state.db);
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListNotificationChannelResponse {
             items: rows.into_iter().map(channel_proto).collect(),

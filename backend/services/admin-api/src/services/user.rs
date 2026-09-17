@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use sea_orm::sea_query::Condition;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::data::repos::UserRepo;
 use crate::data::Viewer;
@@ -205,14 +205,7 @@ impl proto::gen::services::UserServiceHandlers for UserService {
         req: PagingRequest,
     ) -> Result<ListUserResponse, StatusError> {
         let tid = tenant_of(&ctx);
-        let (rows, total) = crate::paging::fetch_paged(
-            &self.state.db,
-            crate::data::sys_users::Entity::find()
-                .filter(crate::data::sys_users::Column::TenantId.eq(tid))
-                .order_by_desc(crate::data::sys_users::Column::CreatedAt),
-            &req,
-        )
-        .await?;
+        let (rows, total) = self.repo(&ctx).paged_list(tid, &req).await?;
         Ok(ListUserResponse {
             items: rows
                 .into_iter()

@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use sea_orm::{ActiveModelTrait, EntityTrait, QueryOrder, Set};
+use sea_orm::{ActiveModelTrait, Set};
 
-use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
+use crate::state::{db_err, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::pagination::PagingRequest;
 use proto::proto::permission::service::v1::{
@@ -51,13 +51,8 @@ impl proto::gen::services::PermissionGroupServiceHandlers for PermissionGroupSer
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListPermissionGroupResponse, StatusError> {
-        let (rows, total) = crate::paging::fetch_paged(
-            &self.state.db,
-            crate::data::sys_permission_groups::Entity::find()
-                .order_by_asc(crate::data::sys_permission_groups::Column::Id),
-            &req,
-        )
-        .await?;
+        let repo = crate::data::repos::PermissionGroupRepo::new(&self.state.db);
+        let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListPermissionGroupResponse {
             items: rows.into_iter().map(group_proto).collect(),
             total,
@@ -69,16 +64,14 @@ impl proto::gen::services::PermissionGroupServiceHandlers for PermissionGroupSer
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetPermissionGroupRequest,
     ) -> Result<PermissionGroup, StatusError> {
-        let Some(proto::proto::permission::service::v1::get_permission_group_request::QueryBy::Id(
-            id,
-        )) = req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
-        let row = crate::data::sys_permission_groups::Entity::find_by_id(id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::permission::service::v1::get_permission_group_request::QueryBy
+        );
+        let repo = crate::data::repos::PermissionGroupRepo::new(&self.state.db);
+        let row = repo
+            .find(id)
+            .await?
             .ok_or_else(|| not_found("permission group"))?;
         Ok(group_proto(row))
     }
@@ -115,10 +108,10 @@ impl proto::gen::services::PermissionGroupServiceHandlers for PermissionGroupSer
         req: UpdatePermissionGroupRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let row = crate::data::sys_permission_groups::Entity::find_by_id(req.id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
+        let repo = crate::data::repos::PermissionGroupRepo::new(&self.state.db);
+        let row = repo
+            .find(req.id)
+            .await?
             .ok_or_else(|| not_found("permission group"))?;
         let mut a: crate::data::sys_permission_groups::ActiveModel = row.into();
         if let Some(data) = &req.data {
@@ -155,16 +148,12 @@ impl proto::gen::services::PermissionGroupServiceHandlers for PermissionGroupSer
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeletePermissionGroupRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(
-            proto::proto::permission::service::v1::delete_permission_group_request::QueryBy::Id(id),
-        ) = req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
-        crate::data::sys_permission_groups::Entity::delete_by_id(id)
-            .exec(&self.state.db)
-            .await
-            .map_err(db_err)?;
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::permission::service::v1::delete_permission_group_request::QueryBy
+        );
+        let repo = crate::data::repos::PermissionGroupRepo::new(&self.state.db);
+        repo.delete_by_id(id).await?;
         Ok(Empty {})
     }
 }

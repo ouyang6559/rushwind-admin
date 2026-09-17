@@ -8,7 +8,9 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, Set};
 
-use crate::state::{db_err, not_found, operator_of, tenant_of, AppState, StatusError};
+use crate::state::{
+    db_err, internal_error, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
+};
 use pbjson_types::Empty;
 use proto::proto::identity::service::v1::{
     CreateOrgUnitRequest, DeleteOrgUnitRequest, GetOrgUnitRequest, ListOrgUnitResponse, OrgUnit,
@@ -112,21 +114,36 @@ pub struct OrgUnitService {
 }
 
 impl OrgUnitService {
-    /// setTreePath: parent path + own id.
-    async fn build_path(&self, parent_id: Option<u32>, own_id: u32) -> String {
+    /// setTreePath: the parent's path (a missing parent for a non-root
+    /// node fails; a root takes the fresh root prefix).
+    async fn build_path(&self, parent_id: Option<u32>, own_id: u32) -> Result<String, StatusError> {
         let repo = crate::data::repos::OrgUnitRepo::new(&self.state.db);
-        let parent_path = match parent_id {
-            Some(pid) => repo
-                .find(pid)
-                .await
-                .ok()
-                .flatten()
-                .and_then(|p| p.path)
-                .unwrap_or_else(|| "/".into()),
-            None => "/".into(),
+        let parent_path = match parent_id.filter(|v| *v != 0) {
+            Some(pid) => {
+                let parent = repo
+                    .find(pid)
+                    .await
+                    .map_err(|_| internal_error("query parent org unit failed"))?
+                    .ok_or_else(|| internal_error("query parent org unit failed"))?;
+                parent.path.unwrap_or_default()
+            }
+            None => String::new(),
         };
-        format!("{parent_path}{own_id}/")
+        Ok(compute_tree_path(&parent_path, own_id))
     }
+}
+
+/// The materialized-path join: roots take "/id/", children append to
+/// the parent's path (trailing slash normalized).
+fn compute_tree_path(parent_path: &str, node_id: u32) -> String {
+    if parent_path.is_empty() {
+        return format!("/{node_id}/");
+    }
+    let mut parent = parent_path.to_string();
+    if !parent.ends_with('/') {
+        parent.push('/');
+    }
+    format!("{parent}{node_id}/")
 }
 
 #[async_trait::async_trait]
@@ -147,15 +164,19 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
 
     async fn get(
         &self,
-        _ctx: rushwind_http_binding::ctx::RequestContext,
+        ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetOrgUnitRequest,
     ) -> Result<OrgUnit, StatusError> {
         let id = crate::query_by_id!(
             req.query_by,
             proto::proto::identity::service::v1::get_org_unit_request::QueryBy
         );
+        let scope = crate::data::Viewer::from_ctx(&ctx).tenant_scope();
         let repo = crate::data::repos::OrgUnitRepo::new(&self.state.db);
-        let row = repo.find(id).await?.ok_or_else(|| not_found("org unit"))?;
+        let row = repo
+            .find_scoped(id, scope)
+            .await?
+            .ok_or_else(|| not_found("org unit"))?;
         Ok(org_proto(row))
     }
 
@@ -194,7 +215,7 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
         .await
         .map_err(db_err)?;
         // Materialized path maintenance (setTreePath).
-        let path = self.build_path(inserted.parent_id, inserted.id).await;
+        let path = self.build_path(inserted.parent_id, inserted.id).await?;
         let mut a: crate::data::sys_org_units::ActiveModel = inserted.into();
         a.path = Set(Some(path));
         a.update(&self.state.db).await.map_err(db_err)?;
@@ -207,14 +228,16 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
         req: UpdateOrgUnitRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
+        let scope = crate::data::Viewer::from_ctx(&ctx).tenant_scope();
         let repo = crate::data::repos::OrgUnitRepo::new(&self.state.db);
         let row = repo
-            .find_tenant(req.id, payload.tenant_id)
+            .find_scoped(req.id, scope)
             .await?
             .ok_or_else(|| not_found("org unit"))?;
         let mut a: crate::data::sys_org_units::ActiveModel = row.into();
-        let mut reparent_to: Option<Option<u32>> = None;
+        let mut parent_present = false;
         if let Some(data) = &req.data {
+            parent_present = data.parent_id.is_some();
             if let Some(v) = &data.name {
                 a.name = Set(v.clone());
             }
@@ -237,33 +260,120 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
                 a.status = Set(Some(if v == 0 { "OFF".into() } else { "ON".into() }));
             }
             if let Some(v) = data.parent_id {
-                reparent_to = Some(if v == 0 { None } else { Some(v) });
+                a.parent_id = Set(if v == 0 { None } else { Some(v) });
+            }
+            if let Some(v) = &data.path {
+                a.path = Set(Some(v.clone()));
+            }
+            if let Some(v) = data.leader_id {
+                a.leader_id = Set(Some(v));
+            }
+            if let Some(v) = &data.external_id {
+                a.external_id = Set(Some(v.clone()));
+            }
+            if let Some(v) = data.is_legal_entity {
+                a.is_legal_entity = Set(Some(v));
+            }
+            if let Some(v) = &data.registration_number {
+                a.registration_number = Set(Some(v.clone()));
+            }
+            if let Some(v) = &data.tax_id {
+                a.tax_id = Set(Some(v.clone()));
+            }
+            if let Some(v) = data.legal_entity_org_id {
+                a.legal_entity_org_id = Set(Some(v));
+            }
+            if let Some(v) = &data.address {
+                a.address = Set(Some(v.clone()));
+            }
+            if let Some(v) = &data.phone {
+                a.phone = Set(Some(v.clone()));
+            }
+            if let Some(v) = &data.email {
+                a.email = Set(Some(v.clone()));
+            }
+            if let Some(v) = &data.timezone {
+                a.timezone = Set(Some(v.clone()));
+            }
+            if let Some(v) = &data.country {
+                a.country = Set(Some(v.clone()));
+            }
+            if let Some(v) = data.latitude {
+                a.latitude = Set(Some(v));
+            }
+            if let Some(v) = data.longitude {
+                a.longitude = Set(Some(v));
+            }
+            if let Some(v) = &data.start_at {
+                a.start_at = Set(crate::state::ts_to_naive(v));
+            }
+            if let Some(v) = &data.end_at {
+                a.end_at = Set(crate::state::ts_to_naive(v));
+            }
+            if let Some(v) = data.contact_user_id {
+                a.contact_user_id = Set(Some(v));
+            }
+            // Absent scope/tag lists clear the columns (the reference's
+            // nil-branch; present lists never ride an update).
+            if data.business_scopes.is_empty() {
+                a.business_scopes = Set(None);
+            }
+            if data.permission_tags.is_empty() {
+                a.permission_tags = Set(None);
             }
         }
         a.updated_by = Set(Some(payload.user_id));
         a.updated_at = Set(Some(crate::data::now()));
         let updated = a.update(&self.state.db).await.map_err(db_err)?;
 
-        // relocateSubtree: rewrite this node's and all descendants' paths.
-        if let Some(new_parent) = reparent_to {
-            let new_path = self.build_path(new_parent, updated.id).await;
-            let old_path = updated
-                .path
-                .clone()
-                .unwrap_or_else(|| format!("/{}/", updated.id));
-            let descendants = repo.all_tenant(payload.tenant_id).await?;
-            for d in descendants {
-                if let Some(d_path) = &d.path {
-                    if d.id == updated.id {
-                        let mut a2: crate::data::sys_org_units::ActiveModel = d.clone().into();
+        // relocateSubtree: BFS over the parent links — recompute this
+        // node's and every descendant's path (dirty ones self-heal); a
+        // move under the node's own descendant rejects, and the path
+        // writes ride the viewer scope (cross-tenant rows keep theirs).
+        if parent_present {
+            let parent_path = match updated.parent_id.filter(|v| *v != 0) {
+                Some(pid) => {
+                    let parent = repo
+                        .find(pid)
+                        .await
+                        .map_err(|_| internal_error("query parent org unit failed"))?
+                        .ok_or_else(|| internal_error("query parent org unit failed"))?;
+                    parent.path.unwrap_or_default()
+                }
+                None => String::new(),
+            };
+            if parent_path.contains(&format!("/{}/", updated.id)) {
+                return Err(status_error(
+                    "BAD_REQUEST",
+                    "cannot move org unit under its own descendant",
+                ));
+            }
+            let mut queue: Vec<(u32, String)> = vec![(updated.id, parent_path)];
+            let mut head = 0;
+            while head < queue.len() {
+                let (id, parent_path) = queue[head].clone();
+                head += 1;
+                let new_path = compute_tree_path(&parent_path, id);
+                let current = repo
+                    .find(id)
+                    .await
+                    .map_err(|_| internal_error("query org unit failed"))?
+                    .and_then(|m| m.path);
+                if current.as_deref() != Some(new_path.as_str()) {
+                    if let Some(row) = repo
+                        .find_scoped(id, scope)
+                        .await
+                        .map_err(|_| internal_error("query org unit failed"))?
+                    {
+                        let mut a2: crate::data::sys_org_units::ActiveModel = row.into();
                         a2.path = Set(Some(new_path.clone()));
-                        a2.update(&self.state.db).await.map_err(db_err)?;
-                    } else if d_path.starts_with(&old_path) {
-                        let rewritten = d_path.replacen(&old_path, &new_path, 1);
-                        let mut a2: crate::data::sys_org_units::ActiveModel = d.into();
-                        a2.path = Set(Some(rewritten));
-                        a2.update(&self.state.db).await.map_err(db_err)?;
+                        a2.update(&self.state.db)
+                            .await
+                            .map_err(|_| internal_error("update org unit path failed"))?;
                     }
+                }
+                for child in repo.children_ids(id).await? {
+                    queue.push((child, new_path.clone()));
                 }
             }
         }
@@ -275,26 +385,46 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeleteOrgUnitRequest,
     ) -> Result<Empty, StatusError> {
-        let payload = operator_of(&ctx)?;
+        let _ = operator_of(&ctx)?;
+        let scope = crate::data::Viewer::from_ctx(&ctx).tenant_scope();
         let id = crate::query_by_id!(
             req.query_by,
             proto::proto::identity::service::v1::delete_org_unit_request::QueryBy
         );
         let repo = crate::data::repos::OrgUnitRepo::new(&self.state.db);
-        let row = repo
-            .find_tenant(id, payload.tenant_id)
-            .await?
-            .ok_or_else(|| not_found("org unit"))?;
-        let prefix = row.path.clone().unwrap_or_else(|| format!("/{}/", row.id));
-        // Self + all descendants via the path prefix.
-        let doomed: Vec<u32> = repo
-            .all_tenant(payload.tenant_id)
-            .await?
-            .into_iter()
-            .filter(|d| d.id == row.id || d.path.as_deref().is_some_and(|p| p.starts_with(&prefix)))
-            .map(|d| d.id)
-            .collect();
-        repo.delete_ids(&doomed).await?;
+        // The subtree via the recursive parent-chain walk (root
+        // included), then the occupation guard: positions still
+        // anchored inside the subtree block the delete.
+        let ids = repo.descendant_ids(id).await?;
+        let positions = repo.count_positions_in(&ids).await?;
+        if positions > 0 {
+            return Err(status_error(
+                "BAD_REQUEST",
+                format!(
+                    "exist {positions} positions under the org unit subtree, delete or move them first"
+                ),
+            ));
+        }
+        // The delete itself: one transaction, the viewer scope riding
+        // the statement (cross-tenant rows inside a mixed subtree
+        // survive).
+        let txn = {
+            use sea_orm::TransactionTrait as _;
+            self.state.db.begin()
+        }
+        .await
+        .map_err(|_| internal_error("start transaction failed"))?;
+        match repo.delete_ids_scoped(&txn, &ids, scope).await {
+            Ok(()) => {
+                txn.commit()
+                    .await
+                    .map_err(|_| internal_error("transaction commit failed"))?;
+            }
+            Err(e) => {
+                let _ = txn.rollback().await;
+                return Err(e);
+            }
+        }
         Ok(Empty {})
     }
 }

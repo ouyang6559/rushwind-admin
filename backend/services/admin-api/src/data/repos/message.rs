@@ -217,33 +217,33 @@ impl<'a> InternalMessageCategoryRepo<'a> {
         .await
     }
 
-    pub async fn find(
+    /// The scoped row lookup — tenant viewers see own-tenant rows only,
+    /// platform/system viewers see everything.
+    pub async fn find_scoped(
         &self,
         id: u32,
+        scope: Option<u32>,
     ) -> Result<Option<crate::data::internal_message_categories::Model>, StatusError> {
-        crate::data::internal_message_categories::Entity::find_by_id(id)
-            .one(self.db)
-            .await
-            .map_err(db_err)
+        let mut query = crate::data::internal_message_categories::Entity::find_by_id(id);
+        if let Some(tid) = scope {
+            query =
+                query.filter(crate::data::internal_message_categories::Column::TenantId.eq(tid));
+        }
+        query.one(self.db).await.map_err(db_err)
     }
 
-    pub async fn find_tenant(
-        &self,
-        id: u32,
-        tenant_id: u32,
-    ) -> Result<Option<crate::data::internal_message_categories::Model>, StatusError> {
-        crate::data::internal_message_categories::Entity::find_by_id(id)
-            .filter(crate::data::internal_message_categories::Column::TenantId.eq(tenant_id))
-            .one(self.db)
-            .await
-            .map_err(db_err)
-    }
-
-    pub async fn delete_by_id(&self, id: u32) -> Result<(), StatusError> {
-        crate::data::internal_message_categories::Entity::delete_by_id(id)
-            .exec(self.db)
-            .await
-            .map_err(db_err)?;
+    /// The scoped delete — tenant viewers delete own-tenant rows only,
+    /// platform/system viewers any named row.
+    pub async fn delete_scoped(&self, id: u32, scope: Option<u32>) -> Result<(), StatusError> {
+        let mut query = crate::data::internal_message_categories::Entity::delete_many()
+            .filter(crate::data::internal_message_categories::Column::Id.eq(id));
+        if let Some(tid) = scope {
+            query =
+                query.filter(crate::data::internal_message_categories::Column::TenantId.eq(tid));
+        }
+        query.exec(self.db).await.map_err(|_| {
+            crate::state::internal_error("delete internal message categories failed")
+        })?;
         Ok(())
     }
 }

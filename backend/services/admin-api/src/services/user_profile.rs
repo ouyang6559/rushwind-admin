@@ -16,19 +16,9 @@ use proto::proto::identity::service::v1::{
 
 use crate::services::{load_user, user_to_proto};
 use crate::state::{internal_error, status_error, AppState};
-use crate::token::UserTokenPayload;
 
 pub struct UserProfileService {
     pub state: Arc<AppState>,
-}
-
-fn operator(
-    ctx: &rushwind_http_binding::ctx::RequestContext,
-) -> Result<UserTokenPayload, crate::state::StatusError> {
-    ctx.claims
-        .as_ref()
-        .and_then(UserTokenPayload::from_claims)
-        .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))
 }
 
 impl UserProfileService {
@@ -136,7 +126,7 @@ impl UserProfileServiceHandlers for UserProfileService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         _req: Empty,
     ) -> Result<User, crate::state::StatusError> {
-        let payload = operator(&ctx)?;
+        let payload = crate::state::operator_of(&ctx)?;
         let (user, codes) = load_user(&self.state, payload.user_id).await?;
         Ok(user_to_proto(user, codes))
     }
@@ -146,7 +136,7 @@ impl UserProfileServiceHandlers for UserProfileService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: UpdateUserRequest,
     ) -> Result<Empty, crate::state::StatusError> {
-        let payload = operator(&ctx)?;
+        let payload = crate::state::operator_of(&ctx)?;
         let row = crate::data::sys_users::Entity::find_by_id(payload.user_id)
             .one(&self.state.db)
             .await
@@ -200,7 +190,7 @@ impl UserProfileServiceHandlers for UserProfileService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: ChangePasswordRequest,
     ) -> Result<Empty, crate::state::StatusError> {
-        let payload = operator(&ctx)?;
+        let payload = crate::state::operator_of(&ctx)?;
         self.change_credential(payload.user_id, &req.old_password, &req.new_password)
             .await?;
         Ok(Empty {})
@@ -211,7 +201,7 @@ impl UserProfileServiceHandlers for UserProfileService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: UploadAvatarRequest,
     ) -> Result<UploadAvatarResponse, crate::state::StatusError> {
-        let payload = operator(&ctx)?;
+        let payload = crate::state::operator_of(&ctx)?;
         // Data-URL storage in the avatar column: self-contained without an
         // object store. (The uploads to MinIO and stores the link.)
         let data_url = match &req.source {
@@ -251,7 +241,7 @@ impl UserProfileServiceHandlers for UserProfileService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         _req: Empty,
     ) -> Result<Empty, crate::state::StatusError> {
-        let payload = operator(&ctx)?;
+        let payload = crate::state::operator_of(&ctx)?;
         let row = crate::data::sys_users::Entity::find_by_id(payload.user_id)
             .one(&self.state.db)
             .await
@@ -271,7 +261,7 @@ impl UserProfileServiceHandlers for UserProfileService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: BindContactRequest,
     ) -> Result<Empty, crate::state::StatusError> {
-        let payload = operator(&ctx)?;
+        let payload = crate::state::operator_of(&ctx)?;
         let row = crate::data::sys_users::Entity::find_by_id(payload.user_id)
             .one(&self.state.db)
             .await
@@ -302,7 +292,7 @@ impl UserProfileServiceHandlers for UserProfileService {
     ) -> Result<Empty, crate::state::StatusError> {
         // No SMS/email gateway is wired;
         // treats this as unverified-but-accepted.
-        let _ = operator(&ctx)?;
+        let _ = crate::state::operator_of(&ctx)?;
         Ok(Empty {})
     }
 }

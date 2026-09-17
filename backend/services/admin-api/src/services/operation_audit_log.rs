@@ -75,15 +75,10 @@ impl proto::gen::services::OperationAuditLogServiceHandlers for OperationAuditLo
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetOperationAuditLogRequest,
     ) -> Result<OperationAuditLog, StatusError> {
-        let Some(proto::proto::audit::service::v1::get_operation_audit_log_request::QueryBy::Id(
-            id,
-        )) = req.query_by
-        else {
-            return Err(crate::state::status_error(
-                "BAD_REQUEST",
-                "query_by required",
-            ));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::audit::service::v1::get_operation_audit_log_request::QueryBy
+        );
         let row = crate::data::sys_operation_audit_logs::Entity::find_by_id(id)
             .one(&self.state.db)
             .await

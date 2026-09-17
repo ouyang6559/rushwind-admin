@@ -175,6 +175,18 @@ pub struct SessionMeta {
     pub login_at: String,
 }
 
+/// Collects one SCAN pattern's keys; `None` when the scan itself fails.
+/// The cursor drops before the caller reuses the connection.
+async fn scan_keys(conn: &mut ConnectionManager, pattern: String) -> Option<Vec<String>> {
+    let mut iter = conn.scan_match::<_, String>(pattern).await.ok()?;
+    let mut keys = Vec::new();
+    while let Some(Ok(key)) = iter.next_item().await {
+        keys.push(key);
+    }
+    drop(iter);
+    Some(keys)
+}
+
 impl TokenStore {
     pub fn new(
         redis: ConnectionManager,
@@ -252,12 +264,7 @@ impl TokenStore {
         let _jti_out = String::new();
         // The jti is inside the token itself; scan this user's rt: rows.
         let pattern = format!("rt:{CLIENT_TYPE_ADMIN}:{uid}:*");
-        let mut iter = conn.scan_match::<_, String>(pattern).await.ok()?;
-        let mut keys = Vec::new();
-        while let Some(Ok(key)) = iter.next_item().await {
-            keys.push(key);
-        }
-        drop(iter);
+        let keys = scan_keys(&mut conn, pattern).await?;
         for key in keys {
             let stored: Option<String> = conn.get(&key).await.ok();
             if stored.as_deref() == Some(token) {
@@ -326,19 +333,10 @@ impl TokenStore {
     }
 
     /// All online sessions for a user (us:0:{uid}:* → (jti, meta)).
-    /// Wired with the online-session service (storage phase).
-    #[allow(dead_code)]
     pub async fn list_user_sessions(&self, uid: u32) -> Vec<(String, SessionMeta)> {
         let mut conn = self.redis.clone();
         let pattern = format!("us:{CLIENT_TYPE_ADMIN}:{uid}:*");
-        let Ok(mut iter) = conn.scan_match::<_, String>(pattern).await else {
-            return Vec::new();
-        };
-        let mut keys = Vec::new();
-        while let Some(Ok(key)) = iter.next_item().await {
-            keys.push(key);
-        }
-        drop(iter);
+        let keys = scan_keys(&mut conn, pattern).await.unwrap_or_default();
         let mut out = Vec::new();
         for key in keys {
             let raw: Option<String> = conn.get(&key).await.ok();
@@ -351,18 +349,11 @@ impl TokenStore {
     }
 
     /// ALL online sessions (us:* → (ct, uid, jti, meta)) — admin listing.
-    /// Wired with the online-session service (storage phase).
-    #[allow(dead_code)]
     pub async fn list_all_sessions(&self) -> Vec<(u32, u32, String, SessionMeta)> {
         let mut conn = self.redis.clone();
-        let Ok(mut iter) = conn.scan_match::<_, String>("us:*".to_string()).await else {
-            return Vec::new();
-        };
-        let mut all_keys = Vec::new();
-        while let Some(Ok(key)) = iter.next_item().await {
-            all_keys.push(key);
-        }
-        drop(iter);
+        let all_keys = scan_keys(&mut conn, "us:*".to_string())
+            .await
+            .unwrap_or_default();
         let mut out = Vec::new();
         for key in all_keys {
             let parts: Vec<&str> = key.split(':').collect();
@@ -385,14 +376,9 @@ impl TokenStore {
         let mut conn = self.redis.clone();
         for prefix in ["at", "rt", "us"] {
             let pattern = format!("{prefix}:{CLIENT_TYPE_ADMIN}:{uid}:*");
-            let Ok(mut iter) = conn.scan_match::<_, String>(pattern).await else {
+            let Some(keys) = scan_keys(&mut conn, pattern).await else {
                 continue;
             };
-            let mut keys = Vec::new();
-            while let Some(Ok(key)) = iter.next_item().await {
-                keys.push(key);
-            }
-            drop(iter);
             if !keys.is_empty() {
                 let _: Result<i64, _> = conn.del(&keys).await;
             }
@@ -400,8 +386,6 @@ impl TokenStore {
     }
 
     /// RevokeTokenByJti across both client types.
-    /// Wired with the online-session service (storage phase).
-    #[allow(dead_code)]
     pub async fn revoke_token_by_jti(&self, uid: u32, jti: &str) {
         let mut conn = self.redis.clone();
         let _: Result<i64, _> = conn

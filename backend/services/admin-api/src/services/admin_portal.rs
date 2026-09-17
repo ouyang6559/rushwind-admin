@@ -15,19 +15,9 @@ use proto::proto::identity::service::v1::User;
 use proto::proto::permission::service::v1::MenuRouteItem;
 
 use crate::state::{internal_error, status_error, AppState};
-use crate::token::UserTokenPayload;
 
 pub struct AdminPortalService {
     pub state: Arc<AppState>,
-}
-
-fn operator(
-    ctx: &rushwind_http_binding::ctx::RequestContext,
-) -> Result<UserTokenPayload, crate::state::StatusError> {
-    ctx.claims
-        .as_ref()
-        .and_then(UserTokenPayload::from_claims)
-        .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))
 }
 
 /// Loads the operator's user row with role codes resolved (the `/me`
@@ -339,7 +329,7 @@ impl AdminPortalServiceHandlers for AdminPortalService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         _req: Empty,
     ) -> Result<ListRouteResponse, crate::state::StatusError> {
-        let payload = operator(&ctx)?;
+        let payload = crate::state::operator_of(&ctx)?;
         let rows = self.permitted_menus(payload.user_id).await?;
         Ok(ListRouteResponse {
             items: Self::build_route_tree(&rows),
@@ -351,7 +341,7 @@ impl AdminPortalServiceHandlers for AdminPortalService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         _req: Empty,
     ) -> Result<ListPermissionCodeResponse, crate::state::StatusError> {
-        let payload = operator(&ctx)?;
+        let payload = crate::state::operator_of(&ctx)?;
         let codes = self.permission_codes(payload.user_id).await?;
         Ok(ListPermissionCodeResponse {
             codes,
@@ -364,7 +354,7 @@ impl AdminPortalServiceHandlers for AdminPortalService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         _req: Empty,
     ) -> Result<InitialContextResponse, crate::state::StatusError> {
-        let payload = operator(&ctx)?;
+        let payload = crate::state::operator_of(&ctx)?;
         let (user, role_codes) = load_user(&self.state, payload.user_id).await?;
         let rows = self.permitted_menus(payload.user_id).await?;
         let codes = self.permission_codes(payload.user_id).await?;

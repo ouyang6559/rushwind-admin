@@ -21,6 +21,11 @@ use crate::state::AppState;
 /// permission data changes surface within this bound.
 const RESOLVE_TTL: Duration = Duration::from_secs(60);
 
+/// The resolve cache's entry ceiling — expired entries drain on every
+/// write and an at-ceiling insert recycles the soonest-expiring entry,
+/// so runs of distinct subjects cannot grow the map without bound.
+const RESOLVE_CACHE_CAP: usize = 1024;
+
 /// The tenant access checks behind the gate's tenant stage. The
 /// reference semantics, in order: unknown tenant → `access denied`;
 /// status off `ON` → `tenant is not active`; expired under a
@@ -142,7 +147,18 @@ impl AccessAuthorizer {
         }
         let resolved = self.resolve_permission_policy(subject, path, method).await;
         if let Ok(mut cache) = self.resolve_cache.lock() {
-            cache.insert(key, (resolved.0, resolved.1, Instant::now() + RESOLVE_TTL));
+            let now = Instant::now();
+            cache.retain(|_, (_, _, expires_at)| *expires_at > now);
+            if cache.len() >= RESOLVE_CACHE_CAP {
+                let victim = cache
+                    .iter()
+                    .min_by_key(|(_, (_, _, expires_at))| *expires_at)
+                    .map(|(k, _)| k.clone());
+                if let Some(victim) = victim {
+                    cache.remove(&victim);
+                }
+            }
+            cache.insert(key, (resolved.0, resolved.1, now + RESOLVE_TTL));
         }
         resolved
     }

@@ -183,6 +183,16 @@ pub fn not_found(what: &str) -> StatusError {
     status_error("NOT_FOUND", format!("{what} not found"))
 }
 
+/// The DB status literal → the wire status code ("OFF" is the only
+/// non-active spelling the schema carries).
+pub fn status_to_proto(s: &str) -> i32 {
+    if s == "OFF" {
+        0
+    } else {
+        1
+    }
+}
+
 /// The required-payload extraction for create-style requests.
 pub fn require_data<T>(data: Option<T>) -> Result<T, StatusError> {
     data.ok_or_else(|| status_error("BAD_REQUEST", "data required"))

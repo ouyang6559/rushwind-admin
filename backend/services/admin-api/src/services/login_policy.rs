@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
-use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
+use crate::state::{db_err, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::authentication::service::v1::{
     CreateLoginPolicyRequest, DeleteLoginPolicyRequest, GetLoginPolicyRequest,
@@ -95,12 +95,10 @@ impl proto::gen::services::LoginPolicyServiceHandlers for LoginPolicyService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetLoginPolicyRequest,
     ) -> Result<LoginPolicy, StatusError> {
-        let Some(proto::proto::authentication::service::v1::get_login_policy_request::QueryBy::Id(
-            id,
-        )) = req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::authentication::service::v1::get_login_policy_request::QueryBy
+        );
         let row = crate::data::sys_login_policies::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
@@ -183,12 +181,10 @@ impl proto::gen::services::LoginPolicyServiceHandlers for LoginPolicyService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeleteLoginPolicyRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(
-            proto::proto::authentication::service::v1::delete_login_policy_request::QueryBy::Id(id),
-        ) = req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::authentication::service::v1::delete_login_policy_request::QueryBy
+        );
         crate::data::sys_login_policies::Entity::delete_by_id(id)
             .exec(&self.state.db)
             .await

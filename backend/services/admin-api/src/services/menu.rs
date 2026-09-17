@@ -13,14 +13,6 @@ use proto::proto::permission::service::v1::{
     UpdateMenuRequest,
 };
 
-fn status_to_proto(s: &str) -> i32 {
-    if s == "OFF" {
-        0
-    } else {
-        1
-    }
-}
-
 fn type_to_proto(s: &str) -> i32 {
     match s {
         "CATALOG" => 0,
@@ -76,7 +68,7 @@ fn module_to_str(v: i32) -> String {
 fn menu_proto(r: crate::data::sys_menus::Model) -> Menu {
     Menu {
         id: Some(r.id),
-        status: r.status.as_deref().map(status_to_proto),
+        status: r.status.as_deref().map(crate::state::status_to_proto),
         r#type: r.type_column.as_deref().map(type_to_proto),
         path: r.path,
         redirect: r.redirect,

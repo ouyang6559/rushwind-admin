@@ -40,14 +40,6 @@ fn scope_to_proto(s: &str) -> i32 {
     }
 }
 
-fn status_to_proto(s: &str) -> i32 {
-    if s == "OFF" {
-        0
-    } else {
-        1
-    }
-}
-
 fn type_to_proto(s: &str) -> i32 {
     match s {
         "SYSTEM" => 1,
@@ -100,7 +92,7 @@ async fn role_proto(state: &AppState, r: crate::data::sys_roles::Model) -> Role 
         name: Some(r.name),
         code: Some(r.code),
         sort_order: r.sort_order,
-        status: r.status.as_deref().map(status_to_proto),
+        status: r.status.as_deref().map(crate::state::status_to_proto),
         description: r.description,
         is_protected: r.is_protected,
         r#type: r.type_column.as_deref().map(type_to_proto),

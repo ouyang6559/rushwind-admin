@@ -12,14 +12,6 @@ use proto::proto::permission::service::v1::{
     ListPermissionGroupResponse, PermissionGroup, UpdatePermissionGroupRequest,
 };
 
-fn status_to_proto(s: &str) -> i32 {
-    if s == "OFF" {
-        0
-    } else {
-        1
-    }
-}
-
 fn group_proto(r: crate::data::sys_permission_groups::Model) -> PermissionGroup {
     PermissionGroup {
         id: Some(r.id),
@@ -27,7 +19,7 @@ fn group_proto(r: crate::data::sys_permission_groups::Model) -> PermissionGroup 
         path: r.path,
         module: r.module,
         sort_order: r.sort_order,
-        status: r.status.as_deref().map(status_to_proto),
+        status: r.status.as_deref().map(crate::state::status_to_proto),
         description: r.description,
         parent_id: r.parent_id,
         children: Vec::new(),

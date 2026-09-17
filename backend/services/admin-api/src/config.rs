@@ -150,49 +150,40 @@ impl Config {
 
         // The code defaults : access 15 min,
         // refresh 7 days.
-        let access_token_expires_secs = std::env::var("RUSHWIND_ACCESS_TOKEN_EXPIRES_SECS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .or_else(|| {
-                jwt.access_token_expires
-                    .as_ref()
-                    .map(|d| d.0.as_secs() as i64)
-            })
-            .unwrap_or(900);
-        let refresh_token_expires_secs = std::env::var("RUSHWIND_REFRESH_TOKEN_EXPIRES_SECS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .or_else(|| {
-                jwt.refresh_token_expires
-                    .as_ref()
-                    .map(|d| d.0.as_secs() as i64)
-            })
-            .unwrap_or(7 * 24 * 3600);
+        let access_token_expires_secs = env_int(
+            "RUSHWIND_ACCESS_TOKEN_EXPIRES_SECS",
+            jwt.access_token_expires
+                .as_ref()
+                .map(|d| d.0.as_secs() as i64),
+            900,
+        );
+        let refresh_token_expires_secs = env_int(
+            "RUSHWIND_REFRESH_TOKEN_EXPIRES_SECS",
+            jwt.refresh_token_expires
+                .as_ref()
+                .map(|d| d.0.as_secs() as i64),
+            7 * 24 * 3600,
+        );
 
         let mut minio = oss.oss.and_then(|o| o.minio).unwrap_or_default();
         // Host-side runs reach the published port, not the network alias.
-        if let Ok(host_endpoint) = std::env::var("RUSHWIND_OSS_ENDPOINT") {
-            if !host_endpoint.is_empty() {
-                minio.endpoint = host_endpoint;
-            }
+        if let Some(host_endpoint) = env_non_empty("RUSHWIND_OSS_ENDPOINT") {
+            minio.endpoint = host_endpoint;
         }
 
         Ok(Config {
-            database_source: std::env::var("RUSHWIND_DATABASE_SOURCE").unwrap_or(database.source),
-            database_migrate: std::env::var("RUSHWIND_DATABASE_MIGRATE")
-                .map(|v| v == "true" || v == "1")
-                .unwrap_or(database.migrate),
-            redis_addr: std::env::var("RUSHWIND_REDIS_ADDR").unwrap_or(redis_section.addr),
-            redis_password: std::env::var("RUSHWIND_REDIS_PASSWORD")
-                .unwrap_or(redis_section.password),
-            jwt_private_key: std::env::var("RUSHWIND_AUTH_JWT_PRIVATE_KEY")
-                .ok()
-                .filter(|v| !v.is_empty())
-                .or_else(|| non_empty(jwt.private_key.clone())),
-            jwt_public_key: std::env::var("RUSHWIND_AUTH_JWT_PUBLIC_KEY")
-                .ok()
-                .filter(|v| !v.is_empty())
-                .or_else(|| non_empty(jwt.public_key.clone())),
+            database_source: env_string("RUSHWIND_DATABASE_SOURCE", database.source),
+            database_migrate: env_bool("RUSHWIND_DATABASE_MIGRATE", database.migrate),
+            redis_addr: env_string("RUSHWIND_REDIS_ADDR", redis_section.addr),
+            redis_password: env_string("RUSHWIND_REDIS_PASSWORD", redis_section.password),
+            jwt_private_key: env_non_empty_or(
+                "RUSHWIND_AUTH_JWT_PRIVATE_KEY",
+                non_empty(jwt.private_key.clone()),
+            ),
+            jwt_public_key: env_non_empty_or(
+                "RUSHWIND_AUTH_JWT_PUBLIC_KEY",
+                non_empty(jwt.public_key.clone()),
+            ),
             access_token_expires_secs,
             refresh_token_expires_secs,
             oss: (!minio.endpoint.is_empty()).then_some(OssConfig {
@@ -207,6 +198,95 @@ impl Config {
     }
 }
 
+/// The env-override forms the loader uses. Each returns the yaml (or
+/// code) default unless the environment carries a value of the expected
+/// shape.
+fn env_int(name: &str, yaml: Option<i64>, default: i64) -> i64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .or(yaml)
+        .unwrap_or(default)
+}
+
+fn env_string(name: &str, yaml: String) -> String {
+    std::env::var(name).unwrap_or(yaml)
+}
+
+fn env_bool(name: &str, yaml: bool) -> bool {
+    std::env::var(name)
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(yaml)
+}
+
+/// A set, non-empty environment value — `None` when unset or empty.
+fn env_non_empty(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.is_empty())
+}
+
+/// A set, non-empty environment value, else a non-empty yaml value.
+fn env_non_empty_or(name: &str, yaml: Option<String>) -> Option<String> {
+    env_non_empty(name).or(yaml)
+}
+
 fn non_empty(v: String) -> Option<String> {
     (!v.is_empty()).then_some(v)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{env_bool, env_int, env_non_empty, env_non_empty_or, env_string};
+    use std::env::{remove_var, set_var};
+
+    // Unique names so parallel tests never collide on the shared
+    // environment.
+    const INT: &str = "RUSHWIND_TEST_ENV_HELPER_INT";
+    const STRING: &str = "RUSHWIND_TEST_ENV_HELPER_STRING";
+    const BOOL: &str = "RUSHWIND_TEST_ENV_HELPER_BOOL";
+    const NON_EMPTY: &str = "RUSHWIND_TEST_ENV_HELPER_NON_EMPTY";
+
+    #[test]
+    fn env_int_takes_parseable_override_else_yaml_else_default() {
+        set_var(INT, "1234");
+        assert_eq!(env_int(INT, None, 42), 1234);
+        set_var(INT, "not-a-number");
+        assert_eq!(env_int(INT, Some(7), 42), 7);
+        remove_var(INT);
+        assert_eq!(env_int(INT, None, 42), 42);
+    }
+
+    #[test]
+    fn env_string_takes_set_value_verbatim_else_yaml() {
+        set_var(STRING, "");
+        assert_eq!(env_string(STRING, "yaml".into()), "");
+        remove_var(STRING);
+        assert_eq!(env_string(STRING, "yaml".into()), "yaml");
+    }
+
+    #[test]
+    fn env_bool_takes_true_or_1_else_yaml() {
+        set_var(BOOL, "true");
+        assert!(env_bool(BOOL, false));
+        set_var(BOOL, "1");
+        assert!(env_bool(BOOL, false));
+        set_var(BOOL, "yes");
+        assert!(!env_bool(BOOL, false));
+        remove_var(BOOL);
+        assert!(!env_bool(BOOL, false));
+        assert!(env_bool(BOOL, true));
+    }
+
+    #[test]
+    fn env_non_empty_skips_empty_values() {
+        set_var(NON_EMPTY, "");
+        assert_eq!(env_non_empty(NON_EMPTY), None);
+        set_var(NON_EMPTY, "value");
+        assert_eq!(env_non_empty(NON_EMPTY), Some("value".to_string()));
+        remove_var(NON_EMPTY);
+        assert_eq!(env_non_empty(NON_EMPTY), None);
+        assert_eq!(
+            env_non_empty_or(NON_EMPTY, Some("fallback".into())),
+            Some("fallback".to_string())
+        );
+    }
 }

@@ -31,11 +31,7 @@ impl MfaService {
         &self,
         ctx: &rushwind_http_binding::ctx::RequestContext,
     ) -> Result<(u32, u32, String), StatusError> {
-        let payload = ctx
-            .claims
-            .as_ref()
-            .and_then(UserTokenPayload::from_claims)
-            .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))?;
+        let payload = crate::state::operator_of(ctx)?;
         Ok((payload.user_id, payload.tenant_id, payload.username))
     }
 

@@ -131,334 +131,87 @@ pub fn build_router(state: Arc<AppState>, docs: crate::server::docs::Wire) -> ax
     // classifies each of its route bindings.
     let mut router_pub = axum::Router::new();
     let mut router_gate = axum::Router::new();
-    (router_pub, router_gate) = proto::gen::mounts::mount_access_key_service(
-        router_pub,
-        router_gate,
-        Arc::new(AccessKeyService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
+    /// The uniform service mount: every service follows the same
+    /// router-threading, service-construction, and wrap handshake.
+    macro_rules! mount_services {
+    ($(($mount:ident, $service:ident)),* $(,)?) => {
+        $(
+            (router_pub, router_gate) = proto::gen::mounts::$mount(
+                router_pub,
+                router_gate,
+                std::sync::Arc::new($service {
+                    state: std::sync::Arc::clone(&state),
+                }),
+                &wrap,
+            );
+        )*
+    };
+}
+
+    // The full mounted surface. The generator's auth-free table
+    // classifies each of its route bindings.
+    mount_services!(
+        (mount_access_key_service, AccessKeyService),
+        (mount_admin_portal_service, AdminPortalService),
+        (mount_api_audit_log_service, ApiAuditLogService),
+        (mount_api_service, ApiService),
+        (mount_authentication_service, AuthenticationService),
+        (mount_config_service, ConfigService),
+        (mount_dashboard_service, DashboardService),
+        (
+            mount_data_access_audit_log_service,
+            DataAccessAuditLogService
+        ),
+        (mount_dict_entry_service, DictEntryService),
+        (mount_dict_type_service, DictTypeService),
+        (mount_file_service, FileService),
+        (mount_file_transfer_service, FileTransferService),
+        (
+            mount_internal_message_category_service,
+            InternalMessageCategoryService
+        ),
+        (
+            mount_internal_message_recipient_service,
+            InternalMessageRecipientService
+        ),
+        (mount_internal_message_service, InternalMessageService),
+        (mount_language_service, LanguageService),
+        (mount_login_audit_log_service, LoginAuditLogService),
+        (mount_login_policy_service, LoginPolicyService),
+        (mount_menu_service, MenuService),
+        (mount_mfa_service, MfaService),
+        (
+            mount_notification_channel_service,
+            NotificationChannelService
+        ),
+        (mount_online_session_service, OnlineSessionService),
+        (mount_operation_audit_log_service, OperationAuditLogService),
+        (mount_org_unit_service, OrgUnitService),
+        (
+            mount_permission_audit_log_service,
+            PermissionAuditLogService
+        ),
+        (mount_permission_group_service, PermissionGroupService),
+        (mount_permission_service, PermissionService),
+        (mount_plan_module_service, PlanModuleService),
+        (mount_plan_quota_service, PlanQuotaService),
+        (mount_plan_service, PlanService),
+        (
+            mount_policy_evaluation_log_service,
+            PolicyEvaluationLogService
+        ),
+        (mount_position_service, PositionService),
+        (mount_redis_cache_monitor_service, RedisCacheMonitorService),
+        (mount_role_service, RoleService),
+        (mount_script_log_service, ScriptLogService),
+        (mount_script_service, ScriptService),
+        (mount_server_monitor_service, ServerMonitorService),
+        (mount_task_service, TaskService),
+        (mount_tenant_service, TenantService),
+        (mount_user_profile_service, UserProfileService),
+        (mount_user_service, UserService),
     );
-    (router_pub, router_gate) = proto::gen::mounts::mount_admin_portal_service(
-        router_pub,
-        router_gate,
-        Arc::new(AdminPortalService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_api_audit_log_service(
-        router_pub,
-        router_gate,
-        Arc::new(ApiAuditLogService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_api_service(
-        router_pub,
-        router_gate,
-        Arc::new(ApiService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_authentication_service(
-        router_pub,
-        router_gate,
-        Arc::new(AuthenticationService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_config_service(
-        router_pub,
-        router_gate,
-        Arc::new(ConfigService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_dashboard_service(
-        router_pub,
-        router_gate,
-        Arc::new(DashboardService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_data_access_audit_log_service(
-        router_pub,
-        router_gate,
-        Arc::new(DataAccessAuditLogService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_dict_entry_service(
-        router_pub,
-        router_gate,
-        Arc::new(DictEntryService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_dict_type_service(
-        router_pub,
-        router_gate,
-        Arc::new(DictTypeService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_file_service(
-        router_pub,
-        router_gate,
-        Arc::new(FileService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_file_transfer_service(
-        router_pub,
-        router_gate,
-        Arc::new(FileTransferService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_internal_message_category_service(
-        router_pub,
-        router_gate,
-        Arc::new(InternalMessageCategoryService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_internal_message_recipient_service(
-        router_pub,
-        router_gate,
-        Arc::new(InternalMessageRecipientService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_internal_message_service(
-        router_pub,
-        router_gate,
-        Arc::new(InternalMessageService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_language_service(
-        router_pub,
-        router_gate,
-        Arc::new(LanguageService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_login_audit_log_service(
-        router_pub,
-        router_gate,
-        Arc::new(LoginAuditLogService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_login_policy_service(
-        router_pub,
-        router_gate,
-        Arc::new(LoginPolicyService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_menu_service(
-        router_pub,
-        router_gate,
-        Arc::new(MenuService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_mfa_service(
-        router_pub,
-        router_gate,
-        Arc::new(MfaService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_notification_channel_service(
-        router_pub,
-        router_gate,
-        Arc::new(NotificationChannelService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_online_session_service(
-        router_pub,
-        router_gate,
-        Arc::new(OnlineSessionService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_operation_audit_log_service(
-        router_pub,
-        router_gate,
-        Arc::new(OperationAuditLogService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_org_unit_service(
-        router_pub,
-        router_gate,
-        Arc::new(OrgUnitService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_permission_audit_log_service(
-        router_pub,
-        router_gate,
-        Arc::new(PermissionAuditLogService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_permission_group_service(
-        router_pub,
-        router_gate,
-        Arc::new(PermissionGroupService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_permission_service(
-        router_pub,
-        router_gate,
-        Arc::new(PermissionService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_plan_module_service(
-        router_pub,
-        router_gate,
-        Arc::new(PlanModuleService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_plan_quota_service(
-        router_pub,
-        router_gate,
-        Arc::new(PlanQuotaService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_plan_service(
-        router_pub,
-        router_gate,
-        Arc::new(PlanService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_policy_evaluation_log_service(
-        router_pub,
-        router_gate,
-        Arc::new(PolicyEvaluationLogService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_position_service(
-        router_pub,
-        router_gate,
-        Arc::new(PositionService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_redis_cache_monitor_service(
-        router_pub,
-        router_gate,
-        Arc::new(RedisCacheMonitorService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_role_service(
-        router_pub,
-        router_gate,
-        Arc::new(RoleService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_script_log_service(
-        router_pub,
-        router_gate,
-        Arc::new(ScriptLogService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_script_service(
-        router_pub,
-        router_gate,
-        Arc::new(ScriptService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_server_monitor_service(
-        router_pub,
-        router_gate,
-        Arc::new(ServerMonitorService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_task_service(
-        router_pub,
-        router_gate,
-        Arc::new(TaskService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_tenant_service(
-        router_pub,
-        router_gate,
-        Arc::new(TenantService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_user_profile_service(
-        router_pub,
-        router_gate,
-        Arc::new(UserProfileService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
-    (router_pub, router_gate) = proto::gen::mounts::mount_user_service(
-        router_pub,
-        router_gate,
-        Arc::new(UserService {
-            state: Arc::clone(&state),
-        }),
-        &wrap,
-    );
+
     let mut app = router_pub.merge(router_gate);
 
     // The docs surface (Swagger UI / Redoc / raw spec), switched by

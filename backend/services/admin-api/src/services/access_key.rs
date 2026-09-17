@@ -64,11 +64,7 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListAccessKeyResponse, crate::state::StatusError> {
-        let _payload = ctx
-            .claims
-            .as_ref()
-            .and_then(UserTokenPayload::from_claims)
-            .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))?;
+        let _payload = crate::state::operator_of(&ctx)?;
         let repo = crate::data::repos::AccessKeyRepo::new(
             &self.state.db,
             crate::data::Viewer::from_ctx(&ctx),
@@ -85,11 +81,7 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetAccessKeyRequest,
     ) -> Result<AccessKey, crate::state::StatusError> {
-        let payload = ctx
-            .claims
-            .as_ref()
-            .and_then(UserTokenPayload::from_claims)
-            .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))?;
+        let payload = crate::state::operator_of(&ctx)?;
         let query = crate::data::sys_access_keys::Entity::find()
             .filter(crate::data::sys_access_keys::Column::TenantId.eq(payload.tenant_id));
         let row = match req.query_by {
@@ -119,11 +111,7 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: CreateAccessKeyRequest,
     ) -> Result<CreateAccessKeyResponse, crate::state::StatusError> {
-        let payload = ctx
-            .claims
-            .as_ref()
-            .and_then(UserTokenPayload::from_claims)
-            .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))?;
+        let payload = crate::state::operator_of(&ctx)?;
         let data = req.data.unwrap_or_default();
         let secret = new_secret();
         let row = crate::data::sys_access_keys::ActiveModel {
@@ -153,11 +141,7 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: UpdateAccessKeyRequest,
     ) -> Result<Empty, crate::state::StatusError> {
-        let payload = ctx
-            .claims
-            .as_ref()
-            .and_then(UserTokenPayload::from_claims)
-            .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))?;
+        let payload = crate::state::operator_of(&ctx)?;
         let row = crate::data::sys_access_keys::Entity::find_by_id(req.id)
             .filter(crate::data::sys_access_keys::Column::TenantId.eq(payload.tenant_id))
             .one(&self.state.db)
@@ -194,11 +178,7 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeleteAccessKeyRequest,
     ) -> Result<Empty, crate::state::StatusError> {
-        let _payload = ctx
-            .claims
-            .as_ref()
-            .and_then(UserTokenPayload::from_claims)
-            .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))?;
+        let _payload = crate::state::operator_of(&ctx)?;
         let id = req.id;
         crate::data::sys_access_keys::Entity::delete_by_id(id)
             .exec(&self.state.db)
@@ -212,11 +192,7 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: ResetAccessKeySecretRequest,
     ) -> Result<CreateAccessKeyResponse, crate::state::StatusError> {
-        let payload = ctx
-            .claims
-            .as_ref()
-            .and_then(UserTokenPayload::from_claims)
-            .ok_or_else(|| status_error("UNAUTHORIZED", "missing identity"))?;
+        let payload = crate::state::operator_of(&ctx)?;
         let row = crate::data::sys_access_keys::Entity::find_by_id(req.id)
             .filter(crate::data::sys_access_keys::Column::TenantId.eq(payload.tenant_id))
             .one(&self.state.db)

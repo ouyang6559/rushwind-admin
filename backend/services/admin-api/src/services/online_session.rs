@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use crate::state::{operator_missing, AppState, StatusError};
-use crate::token::{SessionMeta, UserTokenPayload};
+use crate::state::{AppState, StatusError};
+use crate::token::SessionMeta;
 use proto::proto::online_session::service::v1::{
     ForceLogoutSessionRequest, ForceLogoutSessionResponse, ListMyOnlineSessionRequest,
     ListOnlineSessionRequest, ListOnlineSessionResponse, OnlineSession,
@@ -31,15 +31,6 @@ fn session_proto(jti: &str, uid: u32, meta: &SessionMeta, current_uid: u32) -> O
     }
 }
 
-fn operator(
-    ctx: &rushwind_http_binding::ctx::RequestContext,
-) -> Result<UserTokenPayload, StatusError> {
-    ctx.claims
-        .as_ref()
-        .and_then(UserTokenPayload::from_claims)
-        .ok_or_else(operator_missing)
-}
-
 pub struct OnlineSessionService {
     pub state: Arc<AppState>,
 }
@@ -51,7 +42,7 @@ impl proto::gen::services::OnlineSessionServiceHandlers for OnlineSessionService
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: ListOnlineSessionRequest,
     ) -> Result<ListOnlineSessionResponse, StatusError> {
-        let me = operator(&ctx)?;
+        let me = crate::state::operator_of(&ctx)?;
         let sessions = self.state.tokens.list_all_sessions().await;
         let keyword = req.keyword.clone().unwrap_or_default().to_lowercase();
         let mut items: Vec<OnlineSession> = sessions
@@ -107,7 +98,7 @@ impl proto::gen::services::OnlineSessionServiceHandlers for OnlineSessionService
         ctx: rushwind_http_binding::ctx::RequestContext,
         _req: ListMyOnlineSessionRequest,
     ) -> Result<ListOnlineSessionResponse, StatusError> {
-        let me = operator(&ctx)?;
+        let me = crate::state::operator_of(&ctx)?;
         let sessions = self.state.tokens.list_user_sessions(me.user_id).await;
         let items: Vec<OnlineSession> = sessions
             .iter()
@@ -124,7 +115,7 @@ impl proto::gen::services::OnlineSessionServiceHandlers for OnlineSessionService
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: RevokeMyOnlineSessionRequest,
     ) -> Result<RevokeMyOnlineSessionResponse, StatusError> {
-        let me = operator(&ctx)?;
+        let me = crate::state::operator_of(&ctx)?;
         let Some(jti) = req.jti.clone().filter(|j| !j.is_empty()) else {
             return Err(crate::state::status_error("BAD_REQUEST", "jti required"));
         };

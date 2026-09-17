@@ -58,17 +58,10 @@ impl proto::gen::services::PolicyEvaluationLogServiceHandlers for PolicyEvaluati
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetPolicyEvaluationLogRequest,
     ) -> Result<PolicyEvaluationLog, StatusError> {
-        let Some(
-            proto::proto::permission::service::v1::get_policy_evaluation_log_request::QueryBy::Id(
-                id,
-            ),
-        ) = req.query_by
-        else {
-            return Err(crate::state::status_error(
-                "BAD_REQUEST",
-                "query_by required",
-            ));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::permission::service::v1::get_policy_evaluation_log_request::QueryBy
+        );
         let row = crate::data::sys_policy_evaluation_logs::Entity::find_by_id(id)
             .one(&self.state.db)
             .await

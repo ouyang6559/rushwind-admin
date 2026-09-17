@@ -14,14 +14,6 @@ use proto::proto::permission::service::v1::{
     Api, CreateApiRequest, DeleteApiRequest, GetApiRequest, ListApiResponse, UpdateApiRequest,
 };
 
-fn status_to_proto(s: &str) -> i32 {
-    if s == "OFF" {
-        0
-    } else {
-        1
-    }
-}
-
 /// The `ServiceTagToBusinessModule` map
 /// (pkg/constants/module): tag → module string.
 fn tag_to_module(tag: &str) -> &'static str {
@@ -80,7 +72,7 @@ fn api_proto(r: crate::data::sys_apis::Model) -> Api {
         }),
         description: r.description,
         scope: r.scope.as_deref().map(|s| if s == "APP" { 2 } else { 1 }),
-        status: r.status.as_deref().map(status_to_proto),
+        status: r.status.as_deref().map(crate::state::status_to_proto),
         created_by: r.created_by,
         updated_by: r.updated_by,
         deleted_by: r.deleted_by,

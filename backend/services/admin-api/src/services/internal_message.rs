@@ -8,9 +8,7 @@ use std::sync::Arc;
 use sea_orm::sea_query::Condition;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
-use crate::state::{
-    db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
-};
+use crate::state::{db_err, not_found, operator_of, tenant_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::internal_message::service::v1::{
     DeleteNotificationFromInboxRequest, GetInternalMessageCategoryRequest,
@@ -144,14 +142,10 @@ impl proto::gen::services::InternalMessageServiceHandlers for InternalMessageSer
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetInternalMessageRequest,
     ) -> Result<InternalMessage, StatusError> {
-        let Some(
-            proto::proto::internal_message::service::v1::get_internal_message_request::QueryBy::Id(
-                id,
-            ),
-        ) = req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::internal_message::service::v1::get_internal_message_request::QueryBy
+        );
         let row = crate::data::internal_messages::Entity::find_by_id(id)
             .one(&self.state.db)
             .await

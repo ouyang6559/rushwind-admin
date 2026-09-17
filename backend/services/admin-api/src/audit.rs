@@ -26,6 +26,8 @@ use sea_orm::Set;
 
 use crate::state::AppState;
 
+mod risk;
+
 /// The session-maintenance operation skip list.
 const SESSION_ONLY: &[&str] = &[
     "/admin.service.v1.AuthenticationService/Login",
@@ -111,23 +113,6 @@ fn claims_from_token(headers: &axum::http::HeaderMap) -> Option<(u32, u32, Strin
     Some((uid, tid, username))
 }
 
-fn is_private_ip(ip: &str) -> bool {
-    let octets: Vec<u8> = ip
-        .trim()
-        .split('.')
-        .filter_map(|p| p.parse().ok())
-        .collect();
-    if octets.len() == 4 {
-        let (a, b) = (octets[0], octets[1]);
-        return a == 10
-            || a == 127
-            || (a == 172 && (16..=31).contains(&b))
-            || (a == 192 && b == 168)
-            || (a == 169 && b == 254);
-    }
-    ip.starts_with("[::1]") || ip == "::1" || ip.starts_with("fc") || ip.starts_with("fd")
-}
-
 /// The first non-empty name-ish field from the JSON body's `data` object
 /// (permission audit target name).
 fn target_name_from_body(body: &Option<String>) -> Option<String> {
@@ -155,103 +140,6 @@ fn login_username(body: &Option<String>, audit_header: &str) -> String {
         }
     }
     audit_header.to_string()
-}
-
-/// Risk score computation (0-100).
-fn risk_score(failed: bool, user_id: u32, username: &str, ip: &str, has_device: bool) -> i32 {
-    let mut score = 0;
-    if failed {
-        score += 50;
-    }
-    if user_id == 0 {
-        score += if username.is_empty() { 20 } else { 10 };
-    }
-    if !has_device {
-        score += 10;
-    }
-    if ip.is_empty() {
-        score += 5;
-    } else if is_private_ip(ip) {
-        score -= 10;
-    }
-    score.clamp(0, 100)
-}
-
-fn risk_level(score: u32) -> &'static str {
-    match score {
-        0..=30 => "LOW",
-        31..=70 => "MEDIUM",
-        _ => "HIGH",
-    }
-}
-
-/// Risk factors — deduped and sorted.
-#[allow(clippy::too_many_arguments)]
-fn risk_factors(
-    failed: bool,
-    user_id: u32,
-    username: &str,
-    ip: &str,
-    has_device: bool,
-    mfa_status: &str,
-    failure_reason: &str,
-    request_id: &str,
-    score: u32,
-) -> Vec<String> {
-    let mut set = std::collections::BTreeSet::new();
-    if failed {
-        set.insert("FAILED_LOGIN");
-    }
-    if user_id == 0 {
-        if username.is_empty() {
-            set.insert("ANONYMOUS_LOGIN");
-        } else {
-            set.insert("UNKNOWN_USER");
-        }
-    }
-    if !has_device {
-        set.insert("UNKNOWN_DEVICE");
-    }
-    let mfa = mfa_status.to_uppercase();
-    if mfa.contains("FAILED") {
-        set.insert("MFA_FAILED");
-    }
-    if mfa.contains("UNVERIFY") {
-        set.insert("MFA_UNVERIFIED");
-    }
-    if ip.is_empty() {
-        set.insert("IP_MISSING");
-    } else if is_private_ip(ip) {
-        set.insert("INTERNAL_IP");
-    } else {
-        set.insert("EXTERNAL_IP");
-    }
-    let fr = failure_reason.to_lowercase();
-    if !fr.is_empty() {
-        if fr.contains("password") || fr.contains("pwd") || fr.contains("incorrect") {
-            set.insert("PASSWORD_FAILURE");
-        }
-        if fr.contains("mfa") {
-            set.insert("MFA_FAILURE_REASON");
-        }
-    }
-    set.insert("NO_SESSION");
-    if request_id.is_empty() {
-        set.insert("NO_REQUEST_ID");
-    }
-    match score {
-        71..=100 => {
-            set.insert("HIGH_RISK_SCORE");
-        }
-        31..=70 => {
-            set.insert("MEDIUM_RISK_SCORE");
-        }
-        1..=30 => {
-            set.insert("LOW_RISK_SCORE");
-        }
-        _ => {}
-    }
-    set.into_iter().map(String::from).collect()
 }
 
 /// Target/action parse from the operation string.
@@ -372,8 +260,9 @@ pub async fn layer(
                 None
             };
             let has_device = !user_agent.is_empty();
-            let score = risk_score(failed, uid, &login_username, &ip, has_device).max(0) as u32;
-            let factors = risk_factors(
+            let score =
+                risk::risk_score(failed, uid, &login_username, &ip, has_device).max(0) as u32;
+            let factors = risk::risk_factors(
                 failed,
                 uid,
                 &login_username,
@@ -403,7 +292,7 @@ pub async fn layer(
                 failure_reason: Set(failure_reason),
                 login_method: Set(Some("PASSWORD".into())),
                 risk_score: Set(Some(score)),
-                risk_level: Set(Some(risk_level(score).into())),
+                risk_level: Set(Some(risk::risk_level(score).into())),
                 risk_factors: Set(Some(serde_json::Value::Array(
                     factors
                         .iter()

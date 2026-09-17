@@ -113,7 +113,6 @@ mod language;
 mod login_policy;
 mod menu;
 mod message;
-mod mfa_factor;
 mod notification_channel;
 mod org_unit;
 mod permission;

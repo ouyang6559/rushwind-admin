@@ -14,8 +14,8 @@ use proto::proto::pagination::PagingRequest;
 
 use crate::state::{db_err, StatusError};
 
-/// Column kind guesses for value binding (filter values arrive as JSON
-/// strings; PG needs matching literal types).
+/// The value-binding kind of a filter column (filter values arrive as
+/// JSON strings; PG needs matching literal types).
 #[derive(Clone, Copy, PartialEq)]
 enum Kind {
     Number,
@@ -23,77 +23,34 @@ enum Kind {
     Text,
 }
 
-fn column_kind(name: &str) -> Kind {
-    const NUMERIC: &[&str] = &[
-        "id",
-        "tenant_id",
-        "user_id",
-        "role_id",
-        "permission_id",
-        "menu_id",
-        "api_id",
-        "group_id",
-        "parent_id",
-        "org_unit_id",
-        "position_id",
-        "message_id",
-        "recipient_user_id",
-        "sender_id",
-        "category_id",
-        "type_id",
-        "entry_id",
-        "plan_id",
-        "leader_id",
-        "contact_user_id",
-        "created_by",
-        "updated_by",
-        "deleted_by",
-        "assigned_by",
-        "admin_user_id",
-        "script_id",
-        "operator_id",
-        "membership_id",
-        "policy_id",
-        "reports_to_position_id",
-        "legal_entity_org_id",
-        "headcount",
-        "level",
-        "priority",
-        "version",
-        "template_version",
-        "last_synced_version",
-        "numeric_value",
-        "quota_value",
-        "size",
-        "smtp_port",
-        "latency_ms",
-        "status_code",
-        "risk_score",
-        "affected_rows",
-        "duration_ms",
-        "sort_order",
-    ];
-    const BOOL: &[&str] = &[
-        "is_enabled",
-        "is_primary",
-        "is_protected",
-        "is_default",
-        "is_built_in",
-        "is_template",
-        "enable",
-        "success",
-        "critical",
-        "is_legal_entity",
-        "is_key_position",
-        "data_masked",
-    ];
-    if NUMERIC.contains(&name) {
-        Kind::Number
-    } else if BOOL.contains(&name) {
-        Kind::Bool
-    } else {
-        Kind::Text
+/// The value-binding kind of one entity column, read off the entity's
+/// own schema at runtime — a column absent from the entity (or an
+/// entity-less name) binds as text. Integer-family columns bind
+/// numeric, `Boolean` binds bool.
+fn column_kind<E>(field: &str) -> Kind
+where
+    E: sea_orm::EntityTrait,
+{
+    use sea_orm::entity::ColumnTrait as _;
+    let mut kind = Kind::Text;
+    for col in <E::Column as sea_orm::Iterable>::iter() {
+        if sea_orm::sea_query::Iden::to_string(&col) == field {
+            kind = match col.def().get_column_type() {
+                sea_orm::sea_query::ColumnType::TinyInteger
+                | sea_orm::sea_query::ColumnType::SmallInteger
+                | sea_orm::sea_query::ColumnType::Integer
+                | sea_orm::sea_query::ColumnType::BigInteger
+                | sea_orm::sea_query::ColumnType::TinyUnsigned
+                | sea_orm::sea_query::ColumnType::SmallUnsigned
+                | sea_orm::sea_query::ColumnType::Unsigned
+                | sea_orm::sea_query::ColumnType::BigUnsigned => Kind::Number,
+                sea_orm::sea_query::ColumnType::Boolean => Kind::Bool,
+                _ => Kind::Text,
+            };
+            break;
+        }
     }
+    kind
 }
 
 fn value_of(kind: Kind, value: &str) -> QValue {
@@ -225,7 +182,7 @@ where
     if let Some(FilteringType::Query(query)) = &req.filtering_type {
         let mut conditions: Vec<Condition> = Vec::new();
         let _ = rust_utils::query_parser::parse_filter_json_string(query, |field, op, value| {
-            if let Some(cond) = filter_condition(column_kind(field), field, op, value) {
+            if let Some(cond) = filter_condition(column_kind::<E>(field), field, op, value) {
                 conditions.push(cond);
             }
         });
@@ -287,4 +244,164 @@ where
     }
 
     select
+}
+
+/// The frozen kind oracle: the hand-written name lists the runtime
+/// table replaced. Each listed column's runtime classification must
+/// keep matching its frozen entry — a schema migration flipping a
+/// column's type flips this test. Unlisted names bind as text and
+/// stay unasserted.
+#[cfg(test)]
+mod kind_oracle {
+    use super::{column_kind, Kind};
+
+    const NUMERIC: &[&str] = &[
+        "id",
+        "tenant_id",
+        "user_id",
+        "role_id",
+        "permission_id",
+        "menu_id",
+        "api_id",
+        "group_id",
+        "parent_id",
+        "org_unit_id",
+        "position_id",
+        "message_id",
+        "recipient_user_id",
+        "sender_id",
+        "category_id",
+        "type_id",
+        "entry_id",
+        "plan_id",
+        "leader_id",
+        "contact_user_id",
+        "created_by",
+        "updated_by",
+        "deleted_by",
+        "assigned_by",
+        "admin_user_id",
+        "script_id",
+        "operator_id",
+        "membership_id",
+        "policy_id",
+        "reports_to_position_id",
+        "legal_entity_org_id",
+        "headcount",
+        "level",
+        "priority",
+        "template_version",
+        "last_synced_version",
+        "numeric_value",
+        "quota_value",
+        "size",
+        "smtp_port",
+        "latency_ms",
+        "status_code",
+        "risk_score",
+        "affected_rows",
+        "duration_ms",
+        "sort_order",
+    ];
+    const BOOL: &[&str] = &[
+        "is_enabled",
+        "is_primary",
+        "is_protected",
+        "is_default",
+        "is_built_in",
+        "is_template",
+        "enable",
+        "success",
+        "critical",
+        "is_legal_entity",
+        "is_key_position",
+        "data_masked",
+    ];
+
+    fn frozen(name: &str) -> Option<Kind> {
+        if NUMERIC.contains(&name) {
+            Some(Kind::Number)
+        } else if BOOL.contains(&name) {
+            Some(Kind::Bool)
+        } else {
+            None
+        }
+    }
+
+    /// The runtime classification mirrors the frozen oracle for every
+    /// oracle-listed column of every entity in the data layer.
+    #[test]
+    fn runtime_kinds_match_the_frozen_oracle() {
+        macro_rules! check {
+            ($entity:ty) => {
+                for col in <<$entity as sea_orm::EntityTrait>::Column as sea_orm::Iterable>::iter()
+                {
+                    let name = sea_orm::sea_query::Iden::to_string(&col);
+                    if let Some(expected) = frozen(&name) {
+                        let got = column_kind::<$entity>(&name);
+                        assert_eq!(
+                            std::mem::discriminant(&got),
+                            std::mem::discriminant(&expected),
+                            "kind drift on {name}"
+                        );
+                    }
+                }
+            };
+        }
+        check!(crate::data::files::Entity);
+        check!(crate::data::internal_message_categories::Entity);
+        check!(crate::data::internal_message_recipients::Entity);
+        check!(crate::data::internal_messages::Entity);
+        check!(crate::data::sys_access_keys::Entity);
+        check!(crate::data::sys_api_audit_logs::Entity);
+        check!(crate::data::sys_apis::Entity);
+        check!(crate::data::sys_configs::Entity);
+        check!(crate::data::sys_data_access_audit_logs::Entity);
+        check!(crate::data::sys_dict_entries::Entity);
+        check!(crate::data::sys_dict_entry_i18n::Entity);
+        check!(crate::data::sys_dict_types::Entity);
+        check!(crate::data::sys_languages::Entity);
+        check!(crate::data::sys_login_audit_logs::Entity);
+        check!(crate::data::sys_login_policies::Entity);
+        check!(crate::data::sys_menus::Entity);
+        check!(crate::data::sys_notification_channels::Entity);
+        check!(crate::data::sys_operation_audit_logs::Entity);
+        check!(crate::data::sys_org_units::Entity);
+        check!(crate::data::sys_permission_apis::Entity);
+        check!(crate::data::sys_permission_audit_logs::Entity);
+        check!(crate::data::sys_permission_groups::Entity);
+        check!(crate::data::sys_permission_menus::Entity);
+        check!(crate::data::sys_permissions::Entity);
+        check!(crate::data::sys_plan_modules::Entity);
+        check!(crate::data::sys_plan_quotas::Entity);
+        check!(crate::data::sys_plans::Entity);
+        check!(crate::data::sys_policy_evaluation_logs::Entity);
+        check!(crate::data::sys_positions::Entity);
+        check!(crate::data::sys_role_field_permissions::Entity);
+        check!(crate::data::sys_role_metadata::Entity);
+        check!(crate::data::sys_role_org_units::Entity);
+        check!(crate::data::sys_role_permissions::Entity);
+        check!(crate::data::sys_roles::Entity);
+        check!(crate::data::sys_script_logs::Entity);
+        check!(crate::data::sys_scripts::Entity);
+        check!(crate::data::sys_tasks::Entity);
+        check!(crate::data::sys_tenants::Entity);
+        check!(crate::data::sys_user_credentials::Entity);
+        check!(crate::data::sys_user_mfa_factors::Entity);
+        check!(crate::data::sys_user_roles::Entity);
+        check!(crate::data::sys_users::Entity);
+    }
+
+    /// The schema-typed binding stays schema-typed: sys_plans carries
+    /// `version` as a text label — the one column the retired
+    /// name-keyed table misbound — and it must keep binding as text.
+    #[test]
+    fn plan_version_column_binds_as_text() {
+        assert_eq!(
+            std::mem::discriminant(&super::column_kind::<crate::data::sys_plans::Entity>(
+                "version"
+            )),
+            std::mem::discriminant(&super::Kind::Text)
+        );
+    }
 }

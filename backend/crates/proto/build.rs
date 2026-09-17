@@ -45,28 +45,6 @@ const VENDORED_DATA_FILES: [&str; 1] = ["pagination/v1/pagination.proto"];
 /// descriptor set so references resolve, excluded from pbjson output.
 const WELL_KNOWN_PREFIX: &str = "google/protobuf/";
 
-/// The full closure set is only written for admin-gen; the types set feeds
-/// prost/pbjson. Returns true for files that may enter the types set.
-fn is_types_kept(name: &str) -> bool {
-    let is_admin = name.starts_with("access_key/")
-        || name.starts_with("admin/")
-        || name.starts_with("audit/")
-        || name.starts_with("authentication/")
-        || name.starts_with("config/")
-        || name.starts_with("dict/")
-        || name.starts_with("identity/")
-        || name.starts_with("internal_message/")
-        || name.starts_with("notification_channel/")
-        || name.starts_with("online_session/")
-        || name.starts_with("permission/")
-        || name.starts_with("redis_cache/")
-        || name.starts_with("script/")
-        || name.starts_with("server_monitor/")
-        || name.starts_with("storage/")
-        || name.starts_with("task/");
-    is_admin || VENDORED_DATA_FILES.contains(&name) || name.starts_with(WELL_KNOWN_PREFIX)
-}
-
 fn is_well_known(name: &str) -> bool {
     name.starts_with(WELL_KNOWN_PREFIX)
 }
@@ -97,6 +75,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // hence the generated ROUTES table — follows the CLI file order, so an
     // unsorted walk makes route indices platform-dependent.
     compile_files.sort();
+
+    // The admin contract tree's own top-level modules — derived from the
+    // tree itself so a new module directory needs no whitelist edit. The
+    // types filter keeps a file when its top-level segment is one of these
+    // modules, or it is an explicitly vendored data file, or a well-known
+    // import.
+    let mut admin_tops: Vec<String> = fs::read_dir(&proto_root)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .filter_map(|e| e.file_name().into_string().ok())
+        .collect();
+    admin_tops.sort();
+    let is_types_kept = |name: &str| -> bool {
+        match name.split_once('/') {
+            Some((top, _)) => {
+                admin_tops.iter().any(|t| t == top)
+                    || VENDORED_DATA_FILES.contains(&name)
+                    || name.starts_with(WELL_KNOWN_PREFIX)
+            }
+            None => VENDORED_DATA_FILES.contains(&name) || name.starts_with(WELL_KNOWN_PREFIX),
+        }
+    };
 
     let includes = [proto_root.as_path(), third_party_root.as_path()];
 

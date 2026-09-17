@@ -22,20 +22,15 @@ pub enum ViewerKind {
     System,
 }
 
-/// The full viewer surface; methods a
-/// service has not migrated to yet stay as part of the data-layer API.
-#[allow(dead_code)]
+/// The viewer context; the methods a service has not migrated to yet
+/// stay as part of the data-layer API.
 #[derive(Clone, Debug, Copy)]
 pub struct Viewer {
     pub kind: ViewerKind,
     pub user_id: u32,
     pub tenant_id: u32,
-    /// UNIT-scoped rows stay visible through data scopes only; repos use
-    /// this flag for the row-level scope pilot (sys_positions).
-    pub data_scope_all: bool,
 }
 
-#[allow(dead_code)] // the full viewer surface is the data-layer API
 impl Viewer {
     /// The noop viewer (public routes).
     pub fn noop() -> Self {
@@ -43,7 +38,6 @@ impl Viewer {
             kind: ViewerKind::Noop,
             user_id: 0,
             tenant_id: 0,
-            data_scope_all: false,
         }
     }
 
@@ -53,7 +47,6 @@ impl Viewer {
             kind: ViewerKind::System,
             user_id: 0,
             tenant_id: 0,
-            data_scope_all: true,
         }
     }
 
@@ -68,7 +61,6 @@ impl Viewer {
                 kind: ViewerKind::User,
                 user_id: payload.user_id,
                 tenant_id: payload.tenant_id,
-                data_scope_all: payload.data_scopes.iter().any(|s| s == "ALL"),
             },
             None => Self::noop(),
         }
@@ -79,16 +71,6 @@ impl Viewer {
     pub fn tenant_scope(&self) -> Option<u32> {
         match self.kind {
             ViewerKind::User if self.tenant_id > 0 => Some(self.tenant_id),
-            _ => None,
-        }
-    }
-
-    /// TenantMutationGuard: a non-system viewer may only mutate rows of
-    /// its own tenant; platform users pass.
-    pub fn tenant_mutation_scope(&self) -> Option<u32> {
-        match self.kind {
-            ViewerKind::User if self.tenant_id > 0 => Some(self.tenant_id),
-            ViewerKind::Noop => Some(u32::MAX), // deny-all sentinel
             _ => None,
         }
     }

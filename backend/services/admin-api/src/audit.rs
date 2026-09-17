@@ -479,6 +479,10 @@ pub async fn layer(
                     "Create" | "BatchCreate" => "CREATE",
                     "Update" => "UPDATE",
                     "Delete" | "BatchDelete" => "DELETE",
+                    "Export" => "EXPORT",
+                    "Import" => "IMPORT",
+                    "Assign" => "ASSIGN",
+                    "Unassign" => "UNASSIGN",
                     _ => "OTHER",
                 };
                 let row = crate::data::sys_operation_audit_logs::ActiveModel {

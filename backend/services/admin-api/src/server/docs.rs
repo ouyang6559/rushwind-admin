@@ -32,11 +32,7 @@ pub struct Wire {
 /// Parses the docs switches from the pack's settings node. A missing
 /// node leaves both switches off.
 pub fn wire(settings: serde_json::Value) -> Result<Wire, rushwind_bootstrap::BootstrapError> {
-    if settings.is_null() {
-        return Ok(Wire::default());
-    }
-    serde_json::from_value(settings)
-        .map_err(|e| rushwind_bootstrap::BootstrapError::Config(format!("docs switches: {e}")))
+    crate::server::settings_or_default(settings, "docs switches")
 }
 
 /// The raw OpenAPI document (YAML).

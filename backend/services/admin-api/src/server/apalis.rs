@@ -237,27 +237,12 @@ pub fn cron_jobs(
         CronSpec::parse(spec).expect("static cron spec parses")
     }
 
-    // System crons.
-    let tenant_expiry_scan = CronJob::new("tenant_expiry_scan", spec("0 * * * *"), {
-        let state = Arc::clone(&state);
-        move || {
-            let state = Arc::clone(&state);
-            Box::pin(async move {
-                ApalisServer::run_handler(&state.db, "tenant_expiry_scan", &serde_json::json!({}))
-                    .await;
-            })
-        }
-    });
-    let audit_log_archive = CronJob::new("audit_log_archive", spec("30 3 * * *"), {
-        let state = Arc::clone(&state);
-        move || {
-            let state = Arc::clone(&state);
-            Box::pin(async move {
-                ApalisServer::run_handler(&state.db, "audit_log_archive", &serde_json::json!({}))
-                    .await;
-            })
-        }
-    });
+    // Static system crons: one table row per job — name, spec, and the
+    // handler the worker dispatch shares.
+    const STATIC_CRONS: &[(&str, &str)] = &[
+        ("tenant_expiry_scan", "0 * * * *"),
+        ("audit_log_archive", "30 3 * * *"),
+    ];
 
     // The wildcard job: DB-driven PERIODIC rows. The handler re-reads
     // `sys_tasks` each tick, so ControlTask/Update/Delete take effect
@@ -308,9 +293,20 @@ pub fn cron_jobs(
         }
     });
 
-    vec![
-        ("tenant_expiry_scan", tenant_expiry_scan),
-        ("audit_log_archive", audit_log_archive),
-        ("sys_tasks_periodic", sys_tasks_periodic),
-    ]
+    let mut jobs: Vec<(&'static str, CronJob)> = STATIC_CRONS
+        .iter()
+        .map(|&(name, spec_str)| {
+            let state = Arc::clone(&state);
+            let job = CronJob::new(name, spec(spec_str), move || {
+                let state = Arc::clone(&state);
+                let name = name.to_string();
+                Box::pin(async move {
+                    ApalisServer::run_handler(&state.db, &name, &serde_json::json!({})).await;
+                })
+            });
+            (name, job)
+        })
+        .collect();
+    jobs.push(("sys_tasks_periodic", sys_tasks_periodic));
+    jobs
 }

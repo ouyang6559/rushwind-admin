@@ -286,13 +286,7 @@ pub fn factory(
     move |settings, _input| {
         let state = std::sync::Arc::clone(&state);
         Box::pin(async move {
-            let wire = if settings.is_null() {
-                SseWire::default()
-            } else {
-                serde_json::from_value(settings).map_err(|e| {
-                    rushwind_bootstrap::BootstrapError::Config(format!("sse wire: {e}"))
-                })?
-            };
+            let wire = crate::server::settings_or_default::<SseWire>(settings, "sse wire")?;
             let path = if wire.path.is_empty() {
                 "/"
             } else {

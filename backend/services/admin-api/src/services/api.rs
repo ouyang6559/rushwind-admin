@@ -7,9 +7,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 
-use crate::state::{
-    db_err, internal_error, not_found, operator_of, status_error, AppState, StatusError,
-};
+use crate::state::{db_err, internal_error, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::pagination::PagingRequest;
 use proto::proto::permission::service::v1::{
@@ -116,11 +114,10 @@ impl proto::gen::services::ApiServiceHandlers for ApiService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetApiRequest,
     ) -> Result<Api, StatusError> {
-        let Some(proto::proto::permission::service::v1::get_api_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::permission::service::v1::get_api_request::QueryBy
+        );
         let row = crate::data::sys_apis::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
@@ -135,9 +132,7 @@ impl proto::gen::services::ApiServiceHandlers for ApiService {
         req: CreateApiRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::sys_apis::ActiveModel {
             operation: Set(data.operation),
             path: Set(data.path),
@@ -218,11 +213,10 @@ impl proto::gen::services::ApiServiceHandlers for ApiService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeleteApiRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(proto::proto::permission::service::v1::delete_api_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::permission::service::v1::delete_api_request::QueryBy
+        );
         crate::data::sys_permission_apis::Entity::delete_many()
             .filter(crate::data::sys_permission_apis::Column::ApiId.eq(id))
             .exec(&self.state.db)

@@ -83,15 +83,7 @@ pub async fn auth_gate(
     mut req: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
-    let bearer = req
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| {
-            v.strip_prefix("Bearer ")
-                .or_else(|| v.strip_prefix("bearer "))
-        })
-        .map(|t| t.to_owned());
+    let bearer = rushwind_http_binding::ctx::bearer_token(req.headers());
     let headers: Vec<(String, String)> = req
         .headers()
         .iter()
@@ -134,7 +126,10 @@ pub async fn auth_gate(
                 .map(|p| p.as_str().to_owned())
                 .unwrap_or_default();
             let method = req.method().to_string();
-            let ip = client_ip(req.headers());
+            let ip = rushwind_http_binding::ctx::client_ip(
+                req.headers(),
+                rushwind_http_binding::ctx::IpSource::RealIpFirst,
+            );
             let trace_id = trace_id(req.headers());
 
             // The tenant stage: tenant members only.
@@ -203,26 +198,6 @@ fn forbidden(message: &str) -> rushwind_http_binding::envelope::StatusError {
     rushwind_http_binding::envelope::StatusError::new(status, "FORBIDDEN", message)
 }
 
-/// Best-effort client IP: `X-Real-IP`, then the first `X-Forwarded-For`
-/// entry. The socket peer stays unavailable at this layer.
-fn client_ip(headers: &axum::http::HeaderMap) -> String {
-    if let Some(ip) = headers
-        .get("x-real-ip")
-        .and_then(|v| v.to_str().ok())
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-    {
-        return ip.to_owned();
-    }
-    if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
-        let first = xff.split(',').next().unwrap_or("").trim();
-        if !first.is_empty() {
-            return first.to_owned();
-        }
-    }
-    String::new()
-}
-
 /// The trace id: `traceparent`'s trace segment (the second field, 32
 /// hex chars), else `X-Request-Id` — the same source the audit layer
 /// logs, so one request correlates across trails.
@@ -251,16 +226,6 @@ fn trace_id(headers: &axum::http::HeaderMap) -> String {
 mod tests {
     use super::*;
     use axum::http::HeaderMap;
-
-    #[test]
-    fn client_ip_prefers_real_ip_then_first_hop() {
-        let mut h = HeaderMap::new();
-        assert_eq!(client_ip(&h), "");
-        h.insert("x-forwarded-for", "203.0.113.7, 10.0.0.1".parse().unwrap());
-        assert_eq!(client_ip(&h), "203.0.113.7");
-        h.insert("x-real-ip", "198.51.100.9".parse().unwrap());
-        assert_eq!(client_ip(&h), "198.51.100.9");
-    }
 
     #[test]
     fn trace_id_reads_traceparent_then_request_id() {

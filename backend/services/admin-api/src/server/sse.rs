@@ -71,16 +71,8 @@ impl Hub {
 }
 
 fn extract_token(headers: &HeaderMap, query_token: Option<&String>) -> Option<String> {
-    if let Some(v) = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-    {
-        if let Some(rest) = v
-            .strip_prefix("Bearer ")
-            .or_else(|| v.strip_prefix("bearer "))
-        {
-            return Some(rest.to_string());
-        }
+    if let Some(t) = rushwind_http_binding::ctx::bearer_token(headers) {
+        return Some(t);
     }
     if let Some(v) = headers.get("x-token").and_then(|v| v.to_str().ok()) {
         if !v.is_empty() {

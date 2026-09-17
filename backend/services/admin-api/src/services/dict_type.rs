@@ -92,9 +92,7 @@ impl proto::gen::services::DictTypeServiceHandlers for DictTypeService {
         req: CreateDictTypeRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::sys_dict_types::ActiveModel {
             tenant_id: Set(Some(payload.tenant_id)),
             type_code: Set(data.type_code.unwrap_or_default()),
@@ -148,8 +146,7 @@ impl proto::gen::services::DictTypeServiceHandlers for DictTypeService {
         req: DeleteDictTypeRequest,
     ) -> Result<Empty, StatusError> {
         let _ = ctx;
-        // Delete cascades the type's entries (batch delete). BatchDelete(ids).
-        // BatchDelete(ids)).
+        // Delete cascades the type's entries (batch delete).
         crate::data::sys_dict_entries::Entity::delete_many()
             .filter(crate::data::sys_dict_entries::Column::TypeId.is_in(req.ids.clone()))
             .exec(&self.state.db)

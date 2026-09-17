@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
-use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
+use crate::state::{db_err, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::identity::service::v1::{
     CreatePlanModuleRequest, CreatePlanQuotaRequest, CreatePlanRequest, DeletePlanModuleRequest,
@@ -158,11 +158,10 @@ impl proto::gen::services::PlanServiceHandlers for PlanService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetPlanRequest,
     ) -> Result<Plan, StatusError> {
-        let Some(proto::proto::identity::service::v1::get_plan_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::identity::service::v1::get_plan_request::QueryBy
+        );
         let row = crate::data::sys_plans::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
@@ -177,9 +176,7 @@ impl proto::gen::services::PlanServiceHandlers for PlanService {
         req: CreatePlanRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::sys_plans::ActiveModel {
             name: Set(data.name.unwrap_or_default()),
             version: Set(Some(plan_version_to_str(data.version.unwrap_or(0)))),
@@ -241,11 +238,10 @@ impl proto::gen::services::PlanServiceHandlers for PlanService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeletePlanRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(proto::proto::identity::service::v1::delete_plan_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::identity::service::v1::delete_plan_request::QueryBy
+        );
         // CASCADE children.
         crate::data::sys_plan_modules::Entity::delete_many()
             .filter(crate::data::sys_plan_modules::Column::PlanId.eq(id))
@@ -290,11 +286,10 @@ impl proto::gen::services::PlanModuleServiceHandlers for PlanModuleService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetPlanModuleRequest,
     ) -> Result<PlanModule, StatusError> {
-        let Some(proto::proto::identity::service::v1::get_plan_module_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::identity::service::v1::get_plan_module_request::QueryBy
+        );
         let row = crate::data::sys_plan_modules::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
@@ -309,9 +304,7 @@ impl proto::gen::services::PlanModuleServiceHandlers for PlanModuleService {
         req: CreatePlanModuleRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::sys_plan_modules::ActiveModel {
             plan_id: Set(data.plan_id.unwrap_or(0)),
             module: Set(Some(module_to_str(data.module.unwrap_or(0)))),
@@ -354,11 +347,10 @@ impl proto::gen::services::PlanModuleServiceHandlers for PlanModuleService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeletePlanModuleRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(proto::proto::identity::service::v1::delete_plan_module_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::identity::service::v1::delete_plan_module_request::QueryBy
+        );
         crate::data::sys_plan_modules::Entity::delete_by_id(id)
             .exec(&self.state.db)
             .await
@@ -393,9 +385,7 @@ impl proto::gen::services::PlanQuotaServiceHandlers for PlanQuotaService {
         req: CreatePlanQuotaRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::sys_plan_quotas::ActiveModel {
             plan_id: Set(data.plan_id.unwrap_or(0)),
             quota_type: Set(Some(quota_type_to_str(data.quota_type.unwrap_or(0)))),
@@ -439,11 +429,10 @@ impl proto::gen::services::PlanQuotaServiceHandlers for PlanQuotaService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeletePlanQuotaRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(proto::proto::identity::service::v1::delete_plan_quota_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::identity::service::v1::delete_plan_quota_request::QueryBy
+        );
         crate::data::sys_plan_quotas::Entity::delete_by_id(id)
             .exec(&self.state.db)
             .await

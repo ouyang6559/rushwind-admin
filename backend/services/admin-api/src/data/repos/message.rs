@@ -54,22 +54,14 @@ impl<'a> InternalMessageRepo<'a> {
         tenant_id: u32,
         req: &proto::proto::pagination::PagingRequest,
     ) -> Result<(Vec<internal_messages::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base = internal_messages::Entity::find()
-            .filter(internal_messages::Column::TenantId.eq(tenant_id))
-            .order_by_desc(internal_messages::Column::CreatedAt);
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
+        crate::paging::fetch_paged(
+            self.db,
             internal_messages::Entity::find()
                 .filter(internal_messages::Column::TenantId.eq(tenant_id))
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
+                .order_by_desc(internal_messages::Column::CreatedAt),
+            req,
+        )
+        .await
     }
 
     /// DeleteMessageWithRecipients / RevokeMessageWithRecipients.
@@ -113,22 +105,14 @@ impl<'a> InternalMessageRecipientRepo<'a> {
         user_id: u32,
         req: &proto::proto::pagination::PagingRequest,
     ) -> Result<(Vec<internal_message_recipients::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base = internal_message_recipients::Entity::find()
-            .filter(internal_message_recipients::Column::RecipientUserId.eq(user_id))
-            .order_by_desc(internal_message_recipients::Column::CreatedAt);
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
+        crate::paging::fetch_paged(
+            self.db,
             internal_message_recipients::Entity::find()
                 .filter(internal_message_recipients::Column::RecipientUserId.eq(user_id))
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
+                .order_by_desc(internal_message_recipients::Column::CreatedAt),
+            req,
+        )
+        .await
     }
 
     /// One IN query backfills the parent messages (N+1 guard).
@@ -207,29 +191,59 @@ impl<'a> InternalMessageRecipientRepo<'a> {
     }
 }
 
-#[expect(dead_code)]
+/// The category CRUD surface (admin-managed dictionary rows).
 pub struct InternalMessageCategoryRepo<'a> {
     pub db: &'a DatabaseConnection,
-    #[allow(dead_code)]
-    pub viewer: Viewer,
 }
 
-// Pending service wiring: the consuming service still queries inline; this repo goes live when that lands, and the expect below then fires so the attribute gets removed.
-#[expect(dead_code)]
 impl<'a> InternalMessageCategoryRepo<'a> {
-    pub fn new(db: &'a DatabaseConnection, viewer: Viewer) -> Self {
-        Self { db, viewer }
+    pub fn new(db: &'a DatabaseConnection) -> Self {
+        Self { db }
     }
 
-    pub async fn list(
+    /// Paged tenant-scoped listing: returns (rows, total).
+    pub async fn paged_list(
         &self,
         tenant_id: u32,
-    ) -> Result<Vec<crate::data::internal_message_categories::Model>, StatusError> {
-        crate::data::internal_message_categories::Entity::find()
-            .filter(crate::data::internal_message_categories::Column::TenantId.eq(tenant_id))
-            .order_by_asc(crate::data::internal_message_categories::Column::SortOrder)
-            .all(self.db)
+        req: &proto::proto::pagination::PagingRequest,
+    ) -> Result<(Vec<crate::data::internal_message_categories::Model>, u64), StatusError> {
+        crate::paging::fetch_paged(
+            self.db,
+            crate::data::internal_message_categories::Entity::find()
+                .filter(crate::data::internal_message_categories::Column::TenantId.eq(tenant_id))
+                .order_by_asc(crate::data::internal_message_categories::Column::SortOrder),
+            req,
+        )
+        .await
+    }
+
+    pub async fn find(
+        &self,
+        id: u32,
+    ) -> Result<Option<crate::data::internal_message_categories::Model>, StatusError> {
+        crate::data::internal_message_categories::Entity::find_by_id(id)
+            .one(self.db)
             .await
             .map_err(db_err)
+    }
+
+    pub async fn find_tenant(
+        &self,
+        id: u32,
+        tenant_id: u32,
+    ) -> Result<Option<crate::data::internal_message_categories::Model>, StatusError> {
+        crate::data::internal_message_categories::Entity::find_by_id(id)
+            .filter(crate::data::internal_message_categories::Column::TenantId.eq(tenant_id))
+            .one(self.db)
+            .await
+            .map_err(db_err)
+    }
+
+    pub async fn delete_by_id(&self, id: u32) -> Result<(), StatusError> {
+        crate::data::internal_message_categories::Entity::delete_by_id(id)
+            .exec(self.db)
+            .await
+            .map_err(db_err)?;
+        Ok(())
     }
 }

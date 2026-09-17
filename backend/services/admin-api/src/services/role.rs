@@ -294,9 +294,7 @@ impl proto::gen::services::RoleServiceHandlers for RoleService {
         req: CreateRoleRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         let mut a = crate::data::sys_roles::ActiveModel {
             tenant_id: Set(Some(payload.tenant_id)),
             name: Set(data.name.clone().unwrap_or_default()),
@@ -346,11 +344,10 @@ impl proto::gen::services::RoleServiceHandlers for RoleService {
         req: DeleteRoleRequest,
     ) -> Result<Empty, StatusError> {
         let tid = tenant_of(&ctx);
-        let Some(proto::proto::permission::service::v1::delete_role_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::permission::service::v1::delete_role_request::QueryBy
+        );
         let row = crate::data::sys_roles::Entity::find_by_id(id)
             .filter(crate::data::sys_roles::Column::TenantId.eq(tid))
             .one(&self.state.db)

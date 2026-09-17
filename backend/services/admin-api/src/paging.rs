@@ -7,17 +7,15 @@
 
 use sea_orm::sea_query::{Alias, BinOper, Condition, Expr, ExprTrait, Func, SimpleExpr};
 use sea_orm::Value as QValue;
-use sea_orm::{QueryFilter, QueryOrder, QuerySelect, Select};
+use sea_orm::{DatabaseConnection, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Select};
 
 use proto::proto::pagination::paging_request::FilteringType;
 use proto::proto::pagination::PagingRequest;
 
+use crate::state::{db_err, StatusError};
+
 /// The resolved page slice.
 pub struct Paging {
-    #[allow(dead_code)] // reserved for the SQL-side slice variant
-    pub offset: u64,
-    #[allow(dead_code)]
-    pub limit: u64,
     pub no_paging: bool,
 }
 
@@ -197,6 +195,32 @@ fn filter_condition(kind: Kind, field: &str, op: &str, value: &str) -> Option<Co
     Some(cond)
 }
 
+/// The paged fetch envelope shared by every repository listing: rows of
+/// the assembled select plus the total matching the same base (the row
+/// count itself under `no_paging`). `base` carries the fixed predicates
+/// and ordering; request-side filtering/ordering/slicing rides [`apply`].
+pub async fn fetch_paged<E>(
+    db: &DatabaseConnection,
+    base: Select<E>,
+    req: &PagingRequest,
+) -> Result<(Vec<E::Model>, u64), StatusError>
+where
+    E: sea_orm::EntityTrait,
+    E::Model: sea_orm::FromQueryResult + Send + Sync + 'static,
+{
+    let no_paging = req.no_paging.unwrap_or(false);
+    let total = if no_paging {
+        None
+    } else {
+        // count() clears ordering internally, so a pre-sorted base is safe.
+        Some(base.clone().count(db).await.map_err(db_err)?)
+    };
+    let (paged, _) = apply(base, req);
+    let rows = paged.all(db).await.map_err(db_err)?;
+    let total = total.unwrap_or(rows.len() as u64);
+    Ok((rows, total))
+}
+
 /// Applies the PagingRequest to a select: filter conditions, ordering
 /// (falling back to `id`) and page slicing.
 pub fn apply<E>(mut select: Select<E>, req: &PagingRequest) -> (Select<E>, Paging)
@@ -267,12 +291,5 @@ where
         select = select.offset(offset).limit(limit);
     }
 
-    (
-        select,
-        Paging {
-            offset,
-            limit,
-            no_paging,
-        },
-    )
+    (select, Paging { no_paging })
 }

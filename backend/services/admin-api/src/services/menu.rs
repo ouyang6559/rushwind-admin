@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
-use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
+use crate::state::{db_err, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::pagination::PagingRequest;
 use proto::proto::permission::service::v1::{
@@ -158,11 +158,10 @@ impl proto::gen::services::MenuServiceHandlers for MenuService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetMenuRequest,
     ) -> Result<Menu, StatusError> {
-        let Some(proto::proto::permission::service::v1::get_menu_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::permission::service::v1::get_menu_request::QueryBy
+        );
         let row = crate::data::sys_menus::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
@@ -177,9 +176,7 @@ impl proto::gen::services::MenuServiceHandlers for MenuService {
         req: CreateMenuRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         let mut a = crate::data::sys_menus::ActiveModel {
             name: Set(data.name.clone().unwrap_or_default()),
             created_by: Set(Some(payload.user_id)),
@@ -221,11 +218,10 @@ impl proto::gen::services::MenuServiceHandlers for MenuService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeleteMenuRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(proto::proto::permission::service::v1::delete_menu_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::permission::service::v1::delete_menu_request::QueryBy
+        );
         // Cascade: permission links then descendants then the row.
         let children: Vec<u32> = crate::data::sys_menus::Entity::find()
             .filter(crate::data::sys_menus::Column::ParentId.eq(id))

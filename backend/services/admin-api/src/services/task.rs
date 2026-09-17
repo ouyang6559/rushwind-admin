@@ -116,10 +116,10 @@ impl proto::gen::services::TaskServiceHandlers for TaskService {
         req: GetTaskRequest,
     ) -> Result<Task, StatusError> {
         let tid = tenant_of(&ctx);
-        let Some(proto::proto::task::service::v1::get_task_request::QueryBy::Id(id)) = req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::task::service::v1::get_task_request::QueryBy
+        );
         let row = self.load(tid, id).await?;
         Ok(task_proto(row))
     }
@@ -130,9 +130,7 @@ impl proto::gen::services::TaskServiceHandlers for TaskService {
         req: CreateTaskRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         let type_column = match data.r#type.unwrap_or(0) {
             1 => "DELAY".to_string(),
             2 => "WAIT_RESULT".to_string(),
@@ -255,11 +253,10 @@ impl proto::gen::services::TaskServiceHandlers for TaskService {
         req: DeleteTaskRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let Some(proto::proto::task::service::v1::delete_task_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::task::service::v1::delete_task_request::QueryBy
+        );
         let row = self.load(payload.tenant_id, id).await?;
         crate::data::sys_tasks::Entity::delete_by_id(row.id)
             .exec(&self.state.db)

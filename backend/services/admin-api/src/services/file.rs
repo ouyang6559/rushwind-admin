@@ -254,11 +254,10 @@ impl proto::gen::services::FileServiceHandlers for FileService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetFileRequest,
     ) -> Result<File, StatusError> {
-        let Some(proto::proto::storage::service::v1::get_file_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::storage::service::v1::get_file_request::QueryBy
+        );
         let row = crate::data::files::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
@@ -273,9 +272,7 @@ impl proto::gen::services::FileServiceHandlers for FileService {
         req: CreateFileRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::files::ActiveModel {
             tenant_id: Set(Some(payload.tenant_id)),
             provider: Set(Some("MINIO".into())),
@@ -330,11 +327,10 @@ impl proto::gen::services::FileServiceHandlers for FileService {
         req: DeleteFileRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let Some(proto::proto::storage::service::v1::delete_file_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::storage::service::v1::delete_file_request::QueryBy
+        );
         let row = crate::data::files::Entity::find_by_id(id)
             .filter(crate::data::files::Column::TenantId.eq(payload.tenant_id))
             .one(&self.state.db)

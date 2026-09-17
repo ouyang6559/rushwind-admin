@@ -183,6 +183,11 @@ pub fn not_found(what: &str) -> StatusError {
     status_error("NOT_FOUND", format!("{what} not found"))
 }
 
+/// The required-payload extraction for create-style requests.
+pub fn require_data<T>(data: Option<T>) -> Result<T, StatusError> {
+    data.ok_or_else(|| status_error("BAD_REQUEST", "data required"))
+}
+
 /// Naive local datetime → protojson Timestamp (pbjson).
 pub fn naive_to_ts(value: chrono::NaiveDateTime) -> Option<pbjson_types::Timestamp> {
     use chrono::TimeZone as _;

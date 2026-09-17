@@ -6,13 +6,9 @@
 
 use std::sync::Arc;
 
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
-};
+use sea_orm::{ActiveModelTrait, Set};
 
-use crate::state::{
-    db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
-};
+use crate::state::{db_err, not_found, operator_of, tenant_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::identity::service::v1::{
     CreateOrgUnitRequest, DeleteOrgUnitRequest, GetOrgUnitRequest, ListOrgUnitResponse, OrgUnit,
@@ -118,9 +114,10 @@ pub struct OrgUnitService {
 impl OrgUnitService {
     /// setTreePath: parent path + own id.
     async fn build_path(&self, parent_id: Option<u32>, own_id: u32) -> String {
+        let repo = crate::data::repos::OrgUnitRepo::new(&self.state.db);
         let parent_path = match parent_id {
-            Some(pid) => crate::data::sys_org_units::Entity::find_by_id(pid)
-                .one(&self.state.db)
+            Some(pid) => repo
+                .find(pid)
                 .await
                 .ok()
                 .flatten()
@@ -140,20 +137,8 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
         req: PagingRequest,
     ) -> Result<ListOrgUnitResponse, StatusError> {
         let tid = tenant_of(&ctx);
-        let base = crate::data::sys_org_units::Entity::find()
-            .filter(crate::data::sys_org_units::Column::TenantId.eq(tid))
-            .order_by_asc(crate::data::sys_org_units::Column::SortOrder);
-        let (paged, paging) = crate::paging::apply(base, &req);
-        let rows = paged.all(&self.state.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            crate::data::sys_org_units::Entity::find()
-                .filter(crate::data::sys_org_units::Column::TenantId.eq(tid))
-                .count(&self.state.db)
-                .await
-                .unwrap_or(0)
-        };
+        let repo = crate::data::repos::OrgUnitRepo::new(&self.state.db);
+        let (rows, total) = repo.paged_list(tid, &req).await?;
         Ok(ListOrgUnitResponse {
             items: rows.into_iter().map(org_proto).collect(),
             total,
@@ -165,16 +150,12 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetOrgUnitRequest,
     ) -> Result<OrgUnit, StatusError> {
-        let Some(proto::proto::identity::service::v1::get_org_unit_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
-        let row = crate::data::sys_org_units::Entity::find_by_id(id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
-            .ok_or_else(|| not_found("org unit"))?;
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::identity::service::v1::get_org_unit_request::QueryBy
+        );
+        let repo = crate::data::repos::OrgUnitRepo::new(&self.state.db);
+        let row = repo.find(id).await?.ok_or_else(|| not_found("org unit"))?;
         Ok(org_proto(row))
     }
 
@@ -184,9 +165,7 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
         req: CreateOrgUnitRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         let inserted = crate::data::sys_org_units::ActiveModel {
             tenant_id: Set(Some(payload.tenant_id)),
             parent_id: Set(data.parent_id),
@@ -228,11 +207,10 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
         req: UpdateOrgUnitRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let row = crate::data::sys_org_units::Entity::find_by_id(req.id)
-            .filter(crate::data::sys_org_units::Column::TenantId.eq(payload.tenant_id))
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
+        let repo = crate::data::repos::OrgUnitRepo::new(&self.state.db);
+        let row = repo
+            .find_tenant(req.id, payload.tenant_id)
+            .await?
             .ok_or_else(|| not_found("org unit"))?;
         let mut a: crate::data::sys_org_units::ActiveModel = row.into();
         let mut reparent_to: Option<Option<u32>> = None;
@@ -273,11 +251,7 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
                 .path
                 .clone()
                 .unwrap_or_else(|| format!("/{}/", updated.id));
-            let descendants = crate::data::sys_org_units::Entity::find()
-                .filter(crate::data::sys_org_units::Column::TenantId.eq(payload.tenant_id))
-                .all(&self.state.db)
-                .await
-                .map_err(db_err)?;
+            let descendants = repo.all_tenant(payload.tenant_id).await?;
             for d in descendants {
                 if let Some(d_path) = &d.path {
                     if d.id == updated.id {
@@ -302,33 +276,25 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
         req: DeleteOrgUnitRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let Some(proto::proto::identity::service::v1::delete_org_unit_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
-        let row = crate::data::sys_org_units::Entity::find_by_id(id)
-            .filter(crate::data::sys_org_units::Column::TenantId.eq(payload.tenant_id))
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::identity::service::v1::delete_org_unit_request::QueryBy
+        );
+        let repo = crate::data::repos::OrgUnitRepo::new(&self.state.db);
+        let row = repo
+            .find_tenant(id, payload.tenant_id)
+            .await?
             .ok_or_else(|| not_found("org unit"))?;
         let prefix = row.path.clone().unwrap_or_else(|| format!("/{}/", row.id));
         // Self + all descendants via the path prefix.
-        let doomed: Vec<u32> = crate::data::sys_org_units::Entity::find()
-            .filter(crate::data::sys_org_units::Column::TenantId.eq(payload.tenant_id))
-            .all(&self.state.db)
-            .await
-            .map_err(db_err)?
+        let doomed: Vec<u32> = repo
+            .all_tenant(payload.tenant_id)
+            .await?
             .into_iter()
             .filter(|d| d.id == row.id || d.path.as_deref().is_some_and(|p| p.starts_with(&prefix)))
             .map(|d| d.id)
             .collect();
-        crate::data::sys_org_units::Entity::delete_many()
-            .filter(crate::data::sys_org_units::Column::Id.is_in(doomed))
-            .exec(&self.state.db)
-            .await
-            .map_err(db_err)?;
+        repo.delete_ids(&doomed).await?;
         Ok(Empty {})
     }
 }

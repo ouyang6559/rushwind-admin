@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use sea_orm::{ActiveModelTrait, EntityTrait, PaginatorTrait, QueryOrder, Set};
+use sea_orm::{ActiveModelTrait, EntityTrait, QueryOrder, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
 use pbjson_types::Empty;
@@ -51,18 +51,13 @@ impl proto::gen::services::PermissionGroupServiceHandlers for PermissionGroupSer
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListPermissionGroupResponse, StatusError> {
-        let base = crate::data::sys_permission_groups::Entity::find()
-            .order_by_asc(crate::data::sys_permission_groups::Column::Id);
-        let (paged, paging) = crate::paging::apply(base, &req);
-        let rows = paged.all(&self.state.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
+        let (rows, total) = crate::paging::fetch_paged(
+            &self.state.db,
             crate::data::sys_permission_groups::Entity::find()
-                .count(&self.state.db)
-                .await
-                .unwrap_or(0)
-        };
+                .order_by_asc(crate::data::sys_permission_groups::Column::Id),
+            &req,
+        )
+        .await?;
         Ok(ListPermissionGroupResponse {
             items: rows.into_iter().map(group_proto).collect(),
             total,
@@ -94,9 +89,7 @@ impl proto::gen::services::PermissionGroupServiceHandlers for PermissionGroupSer
         req: CreatePermissionGroupRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::sys_permission_groups::ActiveModel {
             name: Set(data.name.unwrap_or_default()),
             module: Set(data.module),

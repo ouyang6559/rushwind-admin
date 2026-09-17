@@ -28,22 +28,14 @@ impl<'a> PlanRepo<'a> {
         &self,
         req: &proto::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_plans::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base = sys_plans::Entity::find()
-            .filter(self.condition())
-            .order_by_asc(sys_plans::Column::Id);
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
+        crate::paging::fetch_paged(
+            self.db,
             sys_plans::Entity::find()
                 .filter(self.condition())
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
+                .order_by_asc(sys_plans::Column::Id),
+            req,
+        )
+        .await
     }
 
     pub async fn get_by_id(&self, id: u32) -> Result<sys_plans::Model, StatusError> {
@@ -94,22 +86,14 @@ impl<'a> PlanModuleRepo<'a> {
         &self,
         req: &proto::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_plan_modules::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base = sys_plan_modules::Entity::find()
-            .filter(self.condition())
-            .order_by_asc(sys_plan_modules::Column::Id);
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
+        crate::paging::fetch_paged(
+            self.db,
             sys_plan_modules::Entity::find()
                 .filter(self.condition())
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
+                .order_by_asc(sys_plan_modules::Column::Id),
+            req,
+        )
+        .await
     }
 
     pub async fn get_by_id(&self, id: u32) -> Result<sys_plan_modules::Model, StatusError> {
@@ -150,22 +134,14 @@ impl<'a> PlanQuotaRepo<'a> {
         &self,
         req: &proto::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_plan_quotas::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base = sys_plan_quotas::Entity::find()
-            .filter(self.condition())
-            .order_by_asc(sys_plan_quotas::Column::Id);
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
+        crate::paging::fetch_paged(
+            self.db,
             sys_plan_quotas::Entity::find()
                 .filter(self.condition())
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
+                .order_by_asc(sys_plan_quotas::Column::Id),
+            req,
+        )
+        .await
     }
 
     pub async fn get_by_id(&self, id: u32) -> Result<sys_plan_quotas::Model, StatusError> {

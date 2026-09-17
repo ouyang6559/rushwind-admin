@@ -6,9 +6,7 @@
 use std::sync::Arc;
 
 use sea_orm::sea_query::Condition;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 
 use crate::data::repos::UserRepo;
 use crate::data::Viewer;
@@ -207,20 +205,14 @@ impl proto::gen::services::UserServiceHandlers for UserService {
         req: PagingRequest,
     ) -> Result<ListUserResponse, StatusError> {
         let tid = tenant_of(&ctx);
-        let base = crate::data::sys_users::Entity::find()
-            .filter(crate::data::sys_users::Column::TenantId.eq(tid))
-            .order_by_desc(crate::data::sys_users::Column::CreatedAt);
-        let (paged, paging) = crate::paging::apply(base, &req);
-        let rows = paged.all(&self.state.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
+        let (rows, total) = crate::paging::fetch_paged(
+            &self.state.db,
             crate::data::sys_users::Entity::find()
                 .filter(crate::data::sys_users::Column::TenantId.eq(tid))
-                .count(&self.state.db)
-                .await
-                .unwrap_or(0)
-        };
+                .order_by_desc(crate::data::sys_users::Column::CreatedAt),
+            &req,
+        )
+        .await?;
         Ok(ListUserResponse {
             items: rows
                 .into_iter()
@@ -259,9 +251,7 @@ impl proto::gen::services::UserServiceHandlers for UserService {
         req: CreateUserRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         let username = data.username.clone().unwrap_or_default();
         if username.is_empty() {
             return Err(status_error("BAD_REQUEST", "username required"));

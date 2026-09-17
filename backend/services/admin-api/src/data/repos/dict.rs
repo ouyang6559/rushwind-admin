@@ -39,22 +39,14 @@ impl<'a> DictTypeRepo<'a> {
         &self,
         req: &proto::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_dict_types::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base = sys_dict_types::Entity::find()
-            .filter(self.condition())
-            .order_by_asc(sys_dict_types::Column::SortOrder);
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
+        crate::paging::fetch_paged(
+            self.db,
             sys_dict_types::Entity::find()
                 .filter(self.condition())
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
+                .order_by_asc(sys_dict_types::Column::SortOrder),
+            req,
+        )
+        .await
     }
 
     pub async fn get_by_code(
@@ -109,22 +101,14 @@ impl<'a> DictEntryRepo<'a> {
         &self,
         req: &proto::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_dict_entries::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base = sys_dict_entries::Entity::find()
-            .filter(self.condition())
-            .order_by_asc(sys_dict_entries::Column::SortOrder);
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
+        crate::paging::fetch_paged(
+            self.db,
             sys_dict_entries::Entity::find()
                 .filter(self.condition())
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
+                .order_by_asc(sys_dict_entries::Column::SortOrder),
+            req,
+        )
+        .await
     }
 
     /// The ListByTypeCode walk: enabled

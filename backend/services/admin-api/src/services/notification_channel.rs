@@ -87,9 +87,7 @@ impl proto::gen::services::NotificationChannelServiceHandlers for NotificationCh
         req: CreateNotificationChannelRequest,
     ) -> Result<NotificationChannel, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         let inserted = crate::data::sys_notification_channels::ActiveModel {
             name: Set(data.name.unwrap_or_default()),
             type_column: Set(Some(if data.r#type == Some(1) {

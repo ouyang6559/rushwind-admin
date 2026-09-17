@@ -10,6 +10,7 @@ pub mod captcha;
 pub mod config;
 pub mod crypto;
 pub mod data;
+pub mod macros;
 pub mod migration;
 pub mod paging;
 pub mod policy;
@@ -19,3 +20,5 @@ pub mod server;
 pub mod services;
 pub mod state;
 pub mod token;
+
+pub(crate) use macros::query_by_id;

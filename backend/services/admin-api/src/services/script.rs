@@ -107,11 +107,10 @@ impl proto::gen::services::ScriptServiceHandlers for ScriptService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetScriptRequest,
     ) -> Result<Script, StatusError> {
-        let Some(proto::proto::script::service::v1::get_script_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::script::service::v1::get_script_request::QueryBy
+        );
         let row = crate::data::sys_scripts::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
@@ -126,9 +125,7 @@ impl proto::gen::services::ScriptServiceHandlers for ScriptService {
         req: CreateScriptRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::sys_scripts::ActiveModel {
             name: Set(data.name.unwrap_or_default()),
             language: Set(Some(language_to_str(data.language.unwrap_or(0)))),

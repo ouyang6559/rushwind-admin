@@ -82,9 +82,7 @@ impl proto::gen::services::LanguageServiceHandlers for LanguageService {
         req: CreateLanguageRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::sys_languages::ActiveModel {
             language_code: Set(data.language_code.unwrap_or_default()),
             language_name: Set(data.language_name.unwrap_or_default()),
@@ -168,11 +166,10 @@ impl proto::gen::services::LanguageServiceHandlers for LanguageService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeleteLanguageRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(proto::proto::dict::service::v1::delete_language_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::dict::service::v1::delete_language_request::QueryBy
+        );
         crate::data::sys_languages::Entity::delete_by_id(id)
             .exec(&self.state.db)
             .await

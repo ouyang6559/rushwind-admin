@@ -73,15 +73,10 @@ fn resolve_operation(method: &Method, path: &str) -> &'static str {
 }
 
 fn client_ip(headers: &axum::http::HeaderMap) -> String {
-    for key in ["x-forwarded-for", "x-real-ip"] {
-        if let Some(v) = headers.get(key).and_then(|v| v.to_str().ok()) {
-            let first = v.split(',').next().unwrap_or("").trim();
-            if !first.is_empty() {
-                return first.to_string();
-            }
-        }
-    }
-    String::new()
+    rushwind_http_binding::ctx::client_ip(
+        headers,
+        rushwind_http_binding::ctx::IpSource::ForwardedFirst,
+    )
 }
 
 fn request_id(headers: &axum::http::HeaderMap) -> String {
@@ -99,13 +94,7 @@ fn request_id(headers: &axum::http::HeaderMap) -> String {
 /// only (gated routes already verified it inside the gate).
 fn claims_from_token(headers: &axum::http::HeaderMap) -> Option<(u32, u32, String)> {
     use base64::Engine as _;
-    let token = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| {
-            v.strip_prefix("Bearer ")
-                .or_else(|| v.strip_prefix("bearer "))
-        })?;
+    let token = rushwind_http_binding::ctx::bearer_token(headers)?;
     let payload_b64 = token.split('.').nth(1)?;
     let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .decode(payload_b64)

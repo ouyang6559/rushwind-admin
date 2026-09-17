@@ -8,52 +8,9 @@ use crate::data::sys_tasks as entity;
 use crate::data::Viewer;
 use crate::state::{db_err, StatusError};
 
-pub struct TaskRepo<'a> {
-    pub db: &'a DatabaseConnection,
-    pub viewer: Viewer,
-}
+repo_shell!(tenant TaskRepo, entity);
 
 impl<'a> TaskRepo<'a> {
-    pub fn new(db: &'a DatabaseConnection, viewer: Viewer) -> Self {
-        Self { db, viewer }
-    }
-
-    fn condition(&self) -> Condition {
-        match self.viewer.tenant_scope() {
-            Some(tid) => Condition::all().add(entity::Column::TenantId.eq(tid)),
-            None => Condition::all(),
-        }
-    }
-
-    pub async fn list(&self) -> Result<Vec<entity::Model>, StatusError> {
-        entity::Entity::find()
-            .filter(self.condition())
-            .all(self.db)
-            .await
-            .map_err(db_err)
-    }
-
-    /// Paged listing over the PagingRequest contract: returns (rows, total).
-    pub async fn paged_list(
-        &self,
-        req: &proto::proto::pagination::PagingRequest,
-    ) -> Result<(Vec<entity::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base = entity::Entity::find().filter(self.condition());
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            entity::Entity::find()
-                .filter(self.condition())
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
-    }
-
     pub async fn get_by_id(&self, id: u32) -> Result<entity::Model, StatusError> {
         let mut query = entity::Entity::find_by_id(id);
         if let Some(tid) = self.viewer.tenant_scope() {

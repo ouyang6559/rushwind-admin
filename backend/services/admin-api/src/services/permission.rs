@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 
-use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
+use crate::state::{db_err, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::pagination::PagingRequest;
 use proto::proto::permission::service::v1::{
@@ -366,11 +366,10 @@ impl proto::gen::services::PermissionServiceHandlers for PermissionService {
         req: GetPermissionRequest,
     ) -> Result<Permission, StatusError> {
         let _ = &ctx;
-        let Some(proto::proto::permission::service::v1::get_permission_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::permission::service::v1::get_permission_request::QueryBy
+        );
         let row = crate::data::sys_permissions::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
@@ -385,9 +384,7 @@ impl proto::gen::services::PermissionServiceHandlers for PermissionService {
         req: CreatePermissionRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         let perm = crate::data::sys_permissions::ActiveModel {
             name: Set(data.name.clone().unwrap_or_default()),
             code: Set(data.code.clone().unwrap_or_default()),
@@ -510,11 +507,10 @@ impl proto::gen::services::PermissionServiceHandlers for PermissionService {
         req: DeletePermissionRequest,
     ) -> Result<Empty, StatusError> {
         let _ = operator_of(&ctx)?;
-        let Some(proto::proto::permission::service::v1::delete_permission_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::permission::service::v1::delete_permission_request::QueryBy
+        );
         crate::data::sys_role_permissions::Entity::delete_many()
             .filter(crate::data::sys_role_permissions::Column::PermissionId.eq(id))
             .exec(&self.state.db)

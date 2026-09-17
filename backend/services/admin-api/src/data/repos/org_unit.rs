@@ -1,85 +1,69 @@
-//! OrgUnitRepo — tenant-scoped queries with
-//! all predicates owned here (never ad-hoc in services).
+//! OrgUnitRepo — org-unit queries: the tenant-scoped listing, the
+//! row lookups, and the tree-walk loads (materialized-path maintenance
+//! rides these in the service).
 
-use sea_orm::sea_query::Condition;
-use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder};
 
 use crate::data::sys_org_units as entity;
-use crate::data::Viewer;
 use crate::state::{db_err, StatusError};
 
-#[expect(dead_code)]
 pub struct OrgUnitRepo<'a> {
     pub db: &'a DatabaseConnection,
-    pub viewer: Viewer,
 }
 
-// Pending service wiring: the consuming service still queries inline; this repo goes live when that lands, and the expect below then fires so the attribute gets removed.
-#[expect(dead_code)]
 impl<'a> OrgUnitRepo<'a> {
-    pub fn new(db: &'a DatabaseConnection, viewer: Viewer) -> Self {
-        Self { db, viewer }
+    pub fn new(db: &'a DatabaseConnection) -> Self {
+        Self { db }
     }
 
-    fn condition(&self) -> Condition {
-        match self.viewer.tenant_scope() {
-            Some(tid) => Condition::all().add(entity::Column::TenantId.eq(tid)),
-            None => Condition::all(),
-        }
+    /// Paged listing within one tenant, sort_order ascending:
+    /// returns (rows, total).
+    pub async fn paged_list(
+        &self,
+        tenant_id: u32,
+        req: &proto::proto::pagination::PagingRequest,
+    ) -> Result<(Vec<entity::Model>, u64), StatusError> {
+        crate::paging::fetch_paged(
+            self.db,
+            entity::Entity::find()
+                .filter(entity::Column::TenantId.eq(tenant_id))
+                .order_by_asc(entity::Column::SortOrder),
+            req,
+        )
+        .await
     }
 
-    pub async fn list(&self) -> Result<Vec<entity::Model>, StatusError> {
+    pub async fn find(&self, id: u32) -> Result<Option<entity::Model>, StatusError> {
+        entity::Entity::find_by_id(id)
+            .one(self.db)
+            .await
+            .map_err(db_err)
+    }
+
+    pub async fn find_tenant(
+        &self,
+        id: u32,
+        tenant_id: u32,
+    ) -> Result<Option<entity::Model>, StatusError> {
+        entity::Entity::find_by_id(id)
+            .filter(entity::Column::TenantId.eq(tenant_id))
+            .one(self.db)
+            .await
+            .map_err(db_err)
+    }
+
+    /// Every row of the tenant — the subtree walks iterate in memory.
+    pub async fn all_tenant(&self, tenant_id: u32) -> Result<Vec<entity::Model>, StatusError> {
         entity::Entity::find()
-            .filter(self.condition())
+            .filter(entity::Column::TenantId.eq(tenant_id))
             .all(self.db)
             .await
             .map_err(db_err)
     }
 
-    /// Paged listing over the PagingRequest contract: returns (rows, total).
-    pub async fn paged_list(
-        &self,
-        req: &proto::proto::pagination::PagingRequest,
-    ) -> Result<(Vec<entity::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base = entity::Entity::find().filter(self.condition());
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            entity::Entity::find()
-                .filter(self.condition())
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
-    }
-
-    pub async fn get_by_id(&self, id: u32) -> Result<entity::Model, StatusError> {
-        let mut query = entity::Entity::find_by_id(id);
-        if let Some(tid) = self.viewer.tenant_scope() {
-            query = entity::Entity::find_by_id(id).filter(entity::Column::TenantId.eq(tid));
-        }
-        query
-            .one(self.db)
-            .await
-            .map_err(db_err)?
-            .ok_or_else(|| StatusError::new(404, "NOT_FOUND", "org unit not found"))
-    }
-
-    pub async fn delete_by_id(&self, id: u32) -> Result<(), StatusError> {
-        if self.viewer.tenant_scope().is_some() {
-            entity::Entity::delete_many()
-                .filter(entity::Column::TenantId.eq(self.viewer.tenant_scope().unwrap_or(0)))
-                .filter(entity::Column::Id.eq(id))
-                .exec(self.db)
-                .await
-                .map_err(db_err)?;
-            return Ok(());
-        }
-        entity::Entity::delete_by_id(id)
+    pub async fn delete_ids(&self, ids: &[u32]) -> Result<(), StatusError> {
+        entity::Entity::delete_many()
+            .filter(entity::Column::Id.is_in(ids.to_vec()))
             .exec(self.db)
             .await
             .map_err(db_err)?;

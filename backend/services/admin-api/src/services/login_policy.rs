@@ -115,9 +115,7 @@ impl proto::gen::services::LoginPolicyServiceHandlers for LoginPolicyService {
         req: CreateLoginPolicyRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::sys_login_policies::ActiveModel {
             tenant_id: Set(Some(payload.tenant_id)),
             target_id: Set(data.target_id.map(|v| v.to_string())),

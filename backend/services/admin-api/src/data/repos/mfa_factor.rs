@@ -8,13 +8,13 @@ use crate::data::sys_user_mfa_factors as entity;
 use crate::data::Viewer;
 use crate::state::{db_err, StatusError};
 
+// Pending service wiring: the consuming service still queries inline; this repo goes live when that lands, and the expect below then fires so the attribute gets removed.
 #[expect(dead_code)]
 pub struct UserMfaFactorRepo<'a> {
     pub db: &'a DatabaseConnection,
     pub viewer: Viewer,
 }
 
-// Pending service wiring: the consuming service still queries inline; this repo goes live when that lands, and the expect below then fires so the attribute gets removed.
 #[expect(dead_code)]
 impl<'a> UserMfaFactorRepo<'a> {
     pub fn new(db: &'a DatabaseConnection, viewer: Viewer) -> Self {
@@ -41,20 +41,12 @@ impl<'a> UserMfaFactorRepo<'a> {
         &self,
         req: &proto::proto::pagination::PagingRequest,
     ) -> Result<(Vec<entity::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base = entity::Entity::find().filter(self.condition());
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            entity::Entity::find()
-                .filter(self.condition())
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
+        crate::paging::fetch_paged(
+            self.db,
+            entity::Entity::find().filter(self.condition()),
+            req,
+        )
+        .await
     }
 
     pub async fn get_by_id(&self, id: u32) -> Result<entity::Model, StatusError> {

@@ -40,19 +40,12 @@ impl<'a> ScriptRepo<'a> {
         &self,
         req: &proto::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_scripts::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base = sys_scripts::Entity::find().order_by_asc(sys_scripts::Column::Id);
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            sys_scripts::Entity::find()
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
+        crate::paging::fetch_paged(
+            self.db,
+            sys_scripts::Entity::find().order_by_asc(sys_scripts::Column::Id),
+            req,
+        )
+        .await
     }
 }
 
@@ -79,20 +72,12 @@ impl<'a> ScriptLogRepo<'a> {
         &self,
         req: &proto::proto::pagination::PagingRequest,
     ) -> Result<(Vec<sys_script_logs::Model>, u64), StatusError> {
-        use sea_orm::PaginatorTrait;
-        let base =
-            sys_script_logs::Entity::find().order_by_desc(sys_script_logs::Column::CreatedAt);
-        let (paged, paging) = crate::paging::apply(base, req);
-        let rows = paged.all(self.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            sys_script_logs::Entity::find()
-                .count(self.db)
-                .await
-                .unwrap_or(0)
-        };
-        Ok((rows, total))
+        crate::paging::fetch_paged(
+            self.db,
+            sys_script_logs::Entity::find().order_by_desc(sys_script_logs::Column::CreatedAt),
+            req,
+        )
+        .await
     }
 
     /// Purge: before-timestamp or everything.

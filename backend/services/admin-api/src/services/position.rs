@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
-use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
+use crate::state::{db_err, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::identity::service::v1::{
     CreatePositionRequest, DeletePositionRequest, GetPositionRequest, ListPositionResponse,
@@ -79,11 +79,10 @@ impl proto::gen::services::PositionServiceHandlers for PositionService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetPositionRequest,
     ) -> Result<Position, StatusError> {
-        let Some(proto::proto::identity::service::v1::get_position_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::identity::service::v1::get_position_request::QueryBy
+        );
         let row = crate::data::sys_positions::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
@@ -98,9 +97,7 @@ impl proto::gen::services::PositionServiceHandlers for PositionService {
         req: CreatePositionRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::sys_positions::ActiveModel {
             tenant_id: Set(Some(payload.tenant_id)),
             name: Set(data.name.unwrap_or_default()),
@@ -179,11 +176,10 @@ impl proto::gen::services::PositionServiceHandlers for PositionService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeletePositionRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(proto::proto::identity::service::v1::delete_position_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::identity::service::v1::delete_position_request::QueryBy
+        );
         crate::data::sys_positions::Entity::delete_by_id(id)
             .exec(&self.state.db)
             .await

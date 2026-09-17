@@ -6,9 +6,7 @@
 use std::sync::Arc;
 
 use sea_orm::sea_query::Condition;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, Set,
-};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::state::{
     db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
@@ -195,9 +193,10 @@ impl proto::gen::services::InternalMessageServiceHandlers for InternalMessageSer
         req: proto::proto::internal_message::service::v1::DeleteInternalMessageRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let Some(proto::proto::internal_message::service::v1::delete_internal_message_request::QueryBy::Id(id)) = req.query_by else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::internal_message::service::v1::delete_internal_message_request::QueryBy
+        );
         let row = crate::data::internal_messages::Entity::find_by_id(id)
             .filter(crate::data::internal_messages::Column::TenantId.eq(payload.tenant_id))
             .one(&self.state.db)
@@ -334,20 +333,8 @@ impl proto::gen::services::InternalMessageCategoryServiceHandlers
         req: PagingRequest,
     ) -> Result<ListInternalMessageCategoryResponse, StatusError> {
         let tid = tenant_of(&ctx);
-        let base = crate::data::internal_message_categories::Entity::find()
-            .filter(crate::data::internal_message_categories::Column::TenantId.eq(tid))
-            .order_by_asc(crate::data::internal_message_categories::Column::SortOrder);
-        let (paged, paging) = crate::paging::apply(base, &req);
-        let rows = paged.all(&self.state.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            crate::data::internal_message_categories::Entity::find()
-                .filter(crate::data::internal_message_categories::Column::TenantId.eq(tid))
-                .count(&self.state.db)
-                .await
-                .unwrap_or(0)
-        };
+        let repo = crate::data::repos::InternalMessageCategoryRepo::new(&self.state.db);
+        let (rows, total) = repo.paged_list(tid, &req).await?;
         Ok(ListInternalMessageCategoryResponse {
             items: rows.into_iter().map(category_proto).collect(),
             total,
@@ -359,13 +346,11 @@ impl proto::gen::services::InternalMessageCategoryServiceHandlers
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetInternalMessageCategoryRequest,
     ) -> Result<InternalMessageCategory, StatusError> {
-        let Some(proto::proto::internal_message::service::v1::get_internal_message_category_request::QueryBy::Id(id)) = req.query_by else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
-        let row = crate::data::internal_message_categories::Entity::find_by_id(id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
+        let id = crate::query_by_id!(req.query_by, proto::proto::internal_message::service::v1::get_internal_message_category_request::QueryBy);
+        let repo = crate::data::repos::InternalMessageCategoryRepo::new(&self.state.db);
+        let row = repo
+            .find(id)
+            .await?
             .ok_or_else(|| not_found("message category"))?;
         Ok(category_proto(row))
     }
@@ -376,9 +361,7 @@ impl proto::gen::services::InternalMessageCategoryServiceHandlers
         req: proto::proto::internal_message::service::v1::CreateInternalMessageCategoryRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::internal_message_categories::ActiveModel {
             tenant_id: Set(Some(payload.tenant_id)),
             name: Set(data.name.unwrap_or_default()),
@@ -403,13 +386,10 @@ impl proto::gen::services::InternalMessageCategoryServiceHandlers
         req: proto::proto::internal_message::service::v1::UpdateInternalMessageCategoryRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let row = crate::data::internal_message_categories::Entity::find_by_id(req.id)
-            .filter(
-                crate::data::internal_message_categories::Column::TenantId.eq(payload.tenant_id),
-            )
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
+        let repo = crate::data::repos::InternalMessageCategoryRepo::new(&self.state.db);
+        let row = repo
+            .find_tenant(req.id, payload.tenant_id)
+            .await?
             .ok_or_else(|| not_found("message category"))?;
         let mut a: crate::data::internal_message_categories::ActiveModel = row.into();
         if let Some(data) = &req.data {
@@ -437,13 +417,9 @@ impl proto::gen::services::InternalMessageCategoryServiceHandlers
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: proto::proto::internal_message::service::v1::DeleteInternalMessageCategoryRequest,
     ) -> Result<Empty, StatusError> {
-        let Some(proto::proto::internal_message::service::v1::delete_internal_message_category_request::QueryBy::Id(id)) = req.query_by else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
-        crate::data::internal_message_categories::Entity::delete_by_id(id)
-            .exec(&self.state.db)
-            .await
-            .map_err(db_err)?;
+        let id = crate::query_by_id!(req.query_by, proto::proto::internal_message::service::v1::delete_internal_message_category_request::QueryBy);
+        let repo = crate::data::repos::InternalMessageCategoryRepo::new(&self.state.db);
+        repo.delete_by_id(id).await?;
         Ok(Empty {})
     }
 }

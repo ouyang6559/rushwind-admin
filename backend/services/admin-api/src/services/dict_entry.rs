@@ -5,9 +5,7 @@ use std::sync::Arc;
 use sea_orm::sea_query::Condition;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 
-use crate::state::{
-    db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
-};
+use crate::state::{db_err, not_found, operator_of, tenant_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::dict::service::v1::{
     CreateDictEntryRequest, DeleteDictEntryRequest, DictEntry, ListDictEntryByTypeCodeRequest,
@@ -65,9 +63,7 @@ impl proto::gen::services::DictEntryServiceHandlers for DictEntryService {
         req: CreateDictEntryRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         crate::data::sys_dict_entries::ActiveModel {
             tenant_id: Set(Some(payload.tenant_id)),
             type_id: Set(data.type_id),

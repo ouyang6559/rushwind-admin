@@ -66,15 +66,12 @@ macro_rules! audit_paged {
             &self,
             req: &PagingRequest,
         ) -> Result<(Vec<$entity::Model>, u64), StatusError> {
-            let base = $entity::Entity::find().order_by_desc($entity::Column::CreatedAt);
-            let (paged, paging) = admin_paging::apply(base, req);
-            let rows = paged.all(self.db).await.map_err(db_err)?;
-            let total = if paging.no_paging {
-                rows.len() as u64
-            } else {
-                $entity::Entity::find().count(self.db).await.unwrap_or(0)
-            };
-            Ok((rows, total))
+            admin_paging::fetch_paged(
+                self.db,
+                $entity::Entity::find().order_by_desc($entity::Column::CreatedAt),
+                req,
+            )
+            .await
         }
     };
 }

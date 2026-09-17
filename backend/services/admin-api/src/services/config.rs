@@ -74,11 +74,10 @@ impl proto::gen::services::ConfigServiceHandlers for ConfigService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetConfigRequest,
     ) -> Result<Config, StatusError> {
-        let Some(proto::proto::config::service::v1::get_config_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::config::service::v1::get_config_request::QueryBy
+        );
         let row = crate::data::sys_configs::Entity::find_by_id(id)
             .one(&self.state.db)
             .await
@@ -93,9 +92,7 @@ impl proto::gen::services::ConfigServiceHandlers for ConfigService {
         req: CreateConfigRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         let value_type = data.value_type.and_then(value_type_to_str);
         crate::data::sys_configs::ActiveModel {
             name: Set(data.name.unwrap_or_default()),
@@ -120,9 +117,7 @@ impl proto::gen::services::ConfigServiceHandlers for ConfigService {
         req: UpdateConfigRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         let key = data.key.clone().unwrap_or_default();
 
         // allow_missing upsert (upsert semantics).
@@ -182,11 +177,10 @@ impl proto::gen::services::ConfigServiceHandlers for ConfigService {
         req: DeleteConfigRequest,
     ) -> Result<Empty, StatusError> {
         let _ = operator_of(&ctx)?;
-        let Some(proto::proto::config::service::v1::delete_config_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::config::service::v1::delete_config_request::QueryBy
+        );
         let row = crate::data::sys_configs::Entity::find_by_id(id)
             .one(&self.state.db)
             .await

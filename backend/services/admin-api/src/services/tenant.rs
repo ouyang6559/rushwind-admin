@@ -6,10 +6,9 @@
 
 use std::sync::Arc;
 
-use sea_orm::sea_query::Condition;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, PaginatorTrait, QueryFilter,
-    QueryOrder, Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, DatabaseTransaction, EntityTrait, QueryFilter, Set,
+    TransactionTrait,
 };
 
 use crate::state::{
@@ -104,21 +103,11 @@ impl TenantService {
         query: proto::proto::identity::service::v1::get_tenant_request::QueryBy,
     ) -> Result<Option<crate::data::sys_tenants::Model>, StatusError> {
         use proto::proto::identity::service::v1::get_tenant_request::QueryBy;
+        let repo = crate::data::repos::TenantRepo::new(&self.state.db);
         match query {
-            QueryBy::Id(id) => crate::data::sys_tenants::Entity::find_by_id(id)
-                .one(&self.state.db)
-                .await
-                .map_err(db_err),
-            QueryBy::Code(code) => crate::data::sys_tenants::Entity::find()
-                .filter(crate::data::sys_tenants::Column::Code.eq(code))
-                .one(&self.state.db)
-                .await
-                .map_err(db_err),
-            QueryBy::Name(name) => crate::data::sys_tenants::Entity::find()
-                .filter(crate::data::sys_tenants::Column::Name.eq(name))
-                .one(&self.state.db)
-                .await
-                .map_err(db_err),
+            QueryBy::Id(id) => repo.find_by_id(id).await,
+            QueryBy::Code(code) => repo.find_by_code(&code).await,
+            QueryBy::Name(name) => repo.find_by_name(&name).await,
         }
     }
 
@@ -320,18 +309,8 @@ impl proto::gen::services::TenantServiceHandlers for TenantService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListTenantResponse, StatusError> {
-        let base = crate::data::sys_tenants::Entity::find()
-            .order_by_asc(crate::data::sys_tenants::Column::Id);
-        let (paged, paging) = crate::paging::apply(base, &req);
-        let rows = paged.all(&self.state.db).await.map_err(db_err)?;
-        let total = if paging.no_paging {
-            rows.len() as u64
-        } else {
-            crate::data::sys_tenants::Entity::find()
-                .count(&self.state.db)
-                .await
-                .unwrap_or(0)
-        };
+        let repo = crate::data::repos::TenantRepo::new(&self.state.db);
+        let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListTenantResponse {
             items: rows.into_iter().map(tenant_proto).collect(),
             total,
@@ -356,29 +335,16 @@ impl proto::gen::services::TenantServiceHandlers for TenantService {
         req: CreateTenantRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let data = req
-            .data
-            .ok_or_else(|| status_error("BAD_REQUEST", "data required"))?;
+        let data = crate::state::require_data(req.data)?;
         // The exists gate: code OR name.
+        let repo = crate::data::repos::TenantRepo::new(&self.state.db);
         if let Some(code) = &data.code {
-            if crate::data::sys_tenants::Entity::find()
-                .filter(crate::data::sys_tenants::Column::Code.eq(code.clone()))
-                .one(&self.state.db)
-                .await
-                .map_err(db_err)?
-                .is_some()
-            {
+            if repo.find_by_code(code).await?.is_some() {
                 return Err(status_error("BAD_REQUEST", "tenant already exists"));
             }
         }
         if let Some(name) = &data.name {
-            if crate::data::sys_tenants::Entity::find()
-                .filter(crate::data::sys_tenants::Column::Name.eq(name.clone()))
-                .one(&self.state.db)
-                .await
-                .map_err(db_err)?
-                .is_some()
-            {
+            if repo.find_by_name(name).await?.is_some() {
                 return Err(status_error("BAD_REQUEST", "tenant already exists"));
             }
         }
@@ -415,10 +381,10 @@ impl proto::gen::services::TenantServiceHandlers for TenantService {
         req: UpdateTenantRequest,
     ) -> Result<Empty, StatusError> {
         let _ = operator_of(&ctx)?;
-        let row = crate::data::sys_tenants::Entity::find_by_id(req.id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
+        let repo = crate::data::repos::TenantRepo::new(&self.state.db);
+        let row = repo
+            .find_by_id(req.id)
+            .await?
             .ok_or_else(|| not_found("tenant"))?;
         let mut a: crate::data::sys_tenants::ActiveModel = row.into();
         if let Some(data) = &req.data {
@@ -461,15 +427,14 @@ impl proto::gen::services::TenantServiceHandlers for TenantService {
         req: DeleteTenantRequest,
     ) -> Result<Empty, StatusError> {
         let _ = operator_of(&ctx)?;
-        let Some(proto::proto::identity::service::v1::delete_tenant_request::QueryBy::Id(id)) =
-            req.query_by
-        else {
-            return Err(status_error("BAD_REQUEST", "query_by required"));
-        };
-        let row = crate::data::sys_tenants::Entity::find_by_id(id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
+        let id = crate::query_by_id!(
+            req.query_by,
+            proto::proto::identity::service::v1::delete_tenant_request::QueryBy
+        );
+        let repo = crate::data::repos::TenantRepo::new(&self.state.db);
+        let row = repo
+            .find_by_id(id)
+            .await?
             .ok_or_else(|| not_found("tenant"))?;
         // Cleanup semantics ride along: the tenants themselves are parked,
         // not deleted (module Delete → cleanup + OFF).
@@ -499,22 +464,13 @@ impl proto::gen::services::TenantServiceHandlers for TenantService {
             return Err(status_error("BAD_REQUEST", "password required"));
         }
         // The exists gate (code OR name).
-        let exists = crate::data::sys_tenants::Entity::find()
-            .filter(
-                Condition::any()
-                    .add(
-                        crate::data::sys_tenants::Column::Code
-                            .eq(tenant_data.code.clone().unwrap_or_default()),
-                    )
-                    .add(
-                        crate::data::sys_tenants::Column::Name
-                            .eq(tenant_data.name.clone().unwrap_or_default()),
-                    ),
+        let repo = crate::data::repos::TenantRepo::new(&self.state.db);
+        let exists = repo
+            .exists_values_any(
+                &tenant_data.code.clone().unwrap_or_default(),
+                &tenant_data.name.clone().unwrap_or_default(),
             )
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
-            .is_some();
+            .await?;
         if exists {
             return Err(status_error("BAD_REQUEST", "tenant already exists"));
         }
@@ -536,21 +492,8 @@ impl proto::gen::services::TenantServiceHandlers for TenantService {
         req: TenantExistsRequest,
     ) -> Result<TenantExistsResponse, StatusError> {
         // OR semantics.
-        let mut query = crate::data::sys_tenants::Entity::find();
-        if !req.code.is_empty() && !req.name.is_empty() {
-            query = query.filter(
-                sea_orm::sea_query::Condition::any()
-                    .add(crate::data::sys_tenants::Column::Code.eq(req.code))
-                    .add(crate::data::sys_tenants::Column::Name.eq(req.name)),
-            );
-        } else if !req.code.is_empty() {
-            query = query.filter(crate::data::sys_tenants::Column::Code.eq(req.code));
-        } else if !req.name.is_empty() {
-            query = query.filter(crate::data::sys_tenants::Column::Name.eq(req.name));
-        } else {
-            return Ok(TenantExistsResponse { exist: false });
-        }
-        let exist = query.one(&self.state.db).await.map_err(db_err)?.is_some();
+        let repo = crate::data::repos::TenantRepo::new(&self.state.db);
+        let exist = repo.exists_any(&req.code, &req.name).await?;
         Ok(TenantExistsResponse { exist })
     }
 
@@ -559,15 +502,9 @@ impl proto::gen::services::TenantServiceHandlers for TenantService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetTenantUsageRequest,
     ) -> Result<TenantUsage, StatusError> {
-        let user_count = crate::data::sys_users::Entity::find()
-            .filter(crate::data::sys_users::Column::TenantId.eq(req.id))
-            .count(&self.state.db)
-            .await
-            .unwrap_or(0);
-        let tenant = crate::data::sys_tenants::Entity::find_by_id(req.id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?;
+        let repo = crate::data::repos::TenantRepo::new(&self.state.db);
+        let user_count = repo.user_count(req.id).await;
+        let tenant = repo.find_by_id(req.id).await?;
         let plan_name = match tenant.as_ref().and_then(|t| t.plan_id) {
             Some(pid) => crate::data::sys_plans::Entity::find_by_id(pid)
                 .one(&self.state.db)
@@ -596,11 +533,8 @@ impl proto::gen::services::TenantServiceHandlers for TenantService {
         let _ = operator_of(&ctx)?;
         self.cleanup_rows(req.id).await?;
         // Park the tenant, keep the row.
-        if let Some(row) = crate::data::sys_tenants::Entity::find_by_id(req.id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
-        {
+        let repo = crate::data::repos::TenantRepo::new(&self.state.db);
+        if let Some(row) = repo.find_by_id(req.id).await? {
             let mut a: crate::data::sys_tenants::ActiveModel = row.into();
             a.status = Set(Some("OFF".into()));
             a.updated_at = Set(Some(crate::data::now()));

@@ -36,6 +36,50 @@
 
 ---
 
+## 界面预览
+
+### 管理后台
+
+三套前端与本仓后端零改动对接，以下界面截自本仓后端（REST :7788）与 React 版前端：
+
+**登录** —— 图形验证码 + 租户编号（留空为平台登录），口令在应用层加密后传输
+
+![登录](./docs/screenshots/console-login.png)
+
+**仪表盘** —— 用户 / 角色 / 登录与操作审计实时统计，含登录趋势与占比分布
+
+![仪表盘](./docs/screenshots/console-dashboard.png)
+
+**用户管理** —— 组织树 + 高级查询，支持多角色、多部门、状态与主管配置
+
+![用户管理](./docs/screenshots/console-users.png)
+
+**菜单管理** —— 目录 / 菜单 / 按钮三类节点，权限标识与路由、组件路径一一对应
+
+![菜单管理](./docs/screenshots/console-menus.png)
+
+**操作审计日志** —— 操作类型、资源定位与请求 ID 全程留痕，成功失败均可追溯
+
+![操作审计日志](./docs/screenshots/console-op-audit.png)
+
+**在线用户** —— 会话与设备视图，支持强制下线
+
+![在线用户](./docs/screenshots/console-online.png)
+
+### API 文档
+
+后端自带 API 文档服务（`server.yaml` 的 `enable_swagger` / `enable_redoc` 开关，原始规格见 `/q/openapi.yaml`），服务启动后即可访问，无需另行部署文档站点。
+
+**Swagger UI** —— `/q/swagger-ui`：全量接口按服务分组，带鉴权入口，可直接在线调试
+
+![Swagger UI](./docs/screenshots/swagger-ui.png)
+
+**ReDoc** —— `/q/redoc`：三栏式接口文档，参数说明与请求 / 响应示例并列呈现
+
+![ReDoc](./docs/screenshots/redoc.png)
+
+---
+
 ## 技术栈
 
 <table>
@@ -242,7 +286,7 @@ rushwind-admin/
 │   │   └── admin-api/              # Admin 服务 crate（src/ 模块树 + assets/ 内嵌资源）
 │   └── testbed/                    # 差分回归台架（compose + admin-diff sweep）
 ├── frontend/                       # React 版同步快照（sync-react.sh + 双清单门 + RushWind 品牌覆写），其余版本占位
-├── docs/                           # 项目文档（binding-spec / development-plan / operator-matrix）
+├── docs/                           # 项目文档（binding-spec / development-plan / operator-matrix / screenshots）
 └── .github/workflows/              # CI（fmt / clippy / test / 契约同步门）
 ```
 

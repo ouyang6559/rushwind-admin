@@ -36,6 +36,50 @@
 
 ---
 
+## スクリーンショット
+
+### 管理コンソール
+
+3 種類のフロントエンドは本リポジトリのバックエンドにゼロ改修で接続できます。以下は React 版フロントエンド + REST :7788 の実際の画面です。
+
+**ログイン** — 画像認証コードとテナント番号（空欄ならプラットフォームログイン）、パスワードはアプリケーション層で暗号化して送信
+
+![ログイン](./docs/screenshots/console-login.png)
+
+**ダッシュボード** — ユーザー / ロール / ログイン / 操作監査の集計と、ログイン推移・比率グラフ
+
+![ダッシュボード](./docs/screenshots/console-dashboard.png)
+
+**ユーザー管理** — 組織ツリーと高度な検索、複数ロール・複数部署・状態の管理
+
+![ユーザー管理](./docs/screenshots/console-users.png)
+
+**メニュー管理** — ディレクトリ / メニュー / ボタンの 3 種ノードと、権限識別子・ルート・コンポーネントパスの対応
+
+![メニュー管理](./docs/screenshots/console-menus.png)
+
+**操作監査ログ** — 操作種別・対象リソース・リクエスト ID を成功 / 失敗ともに記録
+
+![操作監査ログ](./docs/screenshots/console-op-audit.png)
+
+**オンラインユーザー** — セッションとデバイスの一覧、強制ログアウトに対応
+
+![オンラインユーザー](./docs/screenshots/console-online.png)
+
+### API ドキュメント
+
+バックエンドが API ドキュメントを自前で配信します（`server.yaml` の `enable_swagger` / `enable_redoc` スイッチ、生の仕様は `/q/openapi.yaml`）。別途ドキュメントサイトをデプロイする必要はありません。
+
+**Swagger UI** — `/q/swagger-ui`：全エンドポイントをサービス単位でグループ化し、認証エントリとその場で試せるコンソールを備えます
+
+![Swagger UI](./docs/screenshots/swagger-ui.png)
+
+**ReDoc** — `/q/redoc`：3 カラム構成のリファレンス。パラメータの説明とリクエスト / レスポンス例を並べて表示します
+
+![ReDoc](./docs/screenshots/redoc.png)
+
+---
+
 ## 技術スタック
 
 <table>
@@ -242,7 +286,7 @@ rushwind-admin/
 │   │   └── admin-api/              # Admin 服务 crate（src/ 模块树 + assets/ 内嵌资源）
 │   └── testbed/                    # 差分回归台架（compose + admin-diff sweep）
 ├── frontend/                       # React版 同期スナップショット（sync-react.sh + 双マニフェストゲート + RushWind ブランドオーバーレイ）、他版はプレースホルダ
-├── docs/                           # プロジェクトドキュメント（binding-spec / development-plan / operator-matrix）
+├── docs/                           # プロジェクトドキュメント（binding-spec / development-plan / operator-matrix / screenshots）
 └── .github/workflows/              # CI（fmt / clippy / test / 契約同期ゲート）
 ```
 

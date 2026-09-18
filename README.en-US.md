@@ -36,6 +36,50 @@
 
 ---
 
+## Screenshots
+
+### Admin console
+
+All three frontends talk to this repository's backend without a single code change; the shots below come from the React build against REST :7788:
+
+**Sign-in** — image captcha plus a tenant code (leave it blank for platform sign-in); passwords are encrypted at the application layer
+
+![Sign-in](./docs/screenshots/console-login.png)
+
+**Dashboard** — live counts for users, roles, logins and audit entries, with trend and share charts
+
+![Dashboard](./docs/screenshots/console-dashboard.png)
+
+**Users** — organization tree with advanced filters; multi-role, multi-department and status management
+
+![Users](./docs/screenshots/console-users.png)
+
+**Menus** — directory / menu / button nodes, with permission tags bound to route and component paths
+
+![Menus](./docs/screenshots/console-menus.png)
+
+**Operation audit log** — action type, target resource and request ID recorded for every success and failure
+
+![Operation audit log](./docs/screenshots/console-op-audit.png)
+
+**Online sessions** — session and device view with force-logout
+
+![Online sessions](./docs/screenshots/console-online.png)
+
+### API documentation
+
+The backend serves its own API documentation (the `enable_swagger` / `enable_redoc` switches in `server.yaml`; the raw spec is at `/q/openapi.yaml`) — no separate docs site to deploy.
+
+**Swagger UI** — `/q/swagger-ui`: every endpoint grouped by service, with an authorize entry and a try-it-out console
+
+![Swagger UI](./docs/screenshots/swagger-ui.png)
+
+**ReDoc** — `/q/redoc`: a three-pane reference that puts parameter docs beside request / response samples
+
+![ReDoc](./docs/screenshots/redoc.png)
+
+---
+
 ## Tech Stack
 
 <table>
@@ -242,7 +286,7 @@ rushwind-admin/
 │   │   └── admin-api/              # Admin 服务 crate（src/ 模块树 + assets/ 内嵌资源）
 │   └── testbed/                    # 差分回归台架（compose + admin-diff sweep）
 ├── frontend/                       # React edition synced snapshot (sync-react.sh + dual manifests + RushWind brand overlay), other editions placeholder
-├── docs/                           # project docs (binding-spec / development-plan / operator-matrix)
+├── docs/                           # project docs (binding-spec / development-plan / operator-matrix / screenshots)
 └── .github/workflows/              # CI (fmt / clippy / test / contract sync gates)
 ```
 

@@ -197,6 +197,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         proto_module_path: "crate::proto",
         pool_expr: "crate::pool()",
         auth_free: AUTH_FREE,
+        redact_plan_expr: Some("crate::redact_plan()"),
     };
     let src = match rushwind_gen_http::generate_from_bytes(&annotated, &cfg) {
         Ok(src) => src,

@@ -46,6 +46,23 @@ pub fn pool() -> &'static DescriptorPool {
     })
 }
 
+/// The static redaction plan over the annotated pool: every `(redact.v1)`
+/// option the contract tree carries (user email/mobile masks, the
+/// `element = { nested: true }` list envelopes, the i_user BFF's
+/// `method_skip` set), fail-closed resolved once per process — an
+/// unsupported option shape refuses the build, exactly like the plan's
+/// source annotations refuse silent degradation. The generated mounts
+/// thread this to the lifecycle glue, so every response redacts before
+/// it serializes; the reference's redacted server wrappers are the
+/// behavior anchor.
+pub fn redact_plan() -> &'static rushwind_redact::RedactPlan {
+    static PLAN: OnceLock<rushwind_redact::RedactPlan> = OnceLock::new();
+    PLAN.get_or_init(|| {
+        rushwind_redact::RedactPlan::build(pool())
+            .expect("redact plan over the annotated contract pool must build")
+    })
+}
+
 /// Generated route/error/trait/mount surface — do not edit; regenerate by
 /// building.
 #[allow(missing_docs)]

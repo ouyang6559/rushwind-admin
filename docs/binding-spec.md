@@ -142,6 +142,20 @@ rushwind-transport-axum 使用 axum 0.8（`crates/rushwind-transport-axum/Cargo.
   `静态 prost 结构 → encode_to_vec（二进制）→ prost-reflect DynamicMessage::decode（运行时 DescriptorPool）→ prost-reflect protojson 序列化 + serialize_defaults(true)`。
   prost-reflect 的 protojson 实现以 protojson 一致性为目标，`serialize_defaults` 对应 `EmitUnpopulated`。该等价性在 admin-api 的序列化金样测试中逐条钉死（枚举/整型字符串化/bytes/oneof/map/Timestamp/Empty）。
 
+### 3.1 静态脱敏（redact.v1；Go 侧锚点：protoc-gen-go-redact 生成的 RedactedXxxServiceServer 包装器）
+
+- 拦截位置：handler 返回之后、序列化之前——Go 侧是 `redact.Apply(res)` 的生成包装器，Rust 侧是 `serialize_response` 在 transcode 之后对 DynamicMessage 原地应用 `proto::redact_plan()`（见 §6 的装配）。
+- 规则来源：`(redact.v1)` 选项本就随 annotated descriptor 集分发；Rust 侧不做 protoc 插件，由 `rushwind-redact` 在进程启动时对池做一次 fail-closed 解析——遇到不支持的选项词汇（regex/hash/uuid/ip/url/custom/condition、message 级 nil/empty、auto_detect、internal_service/method）直接拒绝启动，与 Go 侧"生成期失败"对齐。
+- 已实现语义（与生成的 `Redact()` 方法逐条对齐）：
+  - 只动**已填充**字段（Go 的 nil 指针判断）；未填充字段序列化时仍走 EmitUnpopulated 默认值；
+  - `(redact.value).mask` = `_redactMask`：`len ≤ keep_first+keep_last` 原样，否则头 + 掩码串 + 尾（Rust 按字符切，Go 按字节切；ASCII 字段两者字节一致，非 ASCII Go 会切碎 UTF-8）；
+  - `(redact.value).email` = `_redactEmail`：无 `@` 原样；local 部分超长才掩码；`mask_domain` 全掩；
+  - `(redact.value).string` 等标量固定值：字段保持**已填充**地置为该值（如 `password: ""`）；
+  - `(redact.value).element = { nested: true }`：对 repeated/map 的每个元素递归应用**元素自身类型**的规则（`redact.Apply(item)`）；
+  - `(redact.method_skip)`：该操作的响应完全不脱敏（生成包装器的 `// Redaction skipped`）。
+- 语料现状：identity/user.proto（email/mobile 规则、ListUserResponse.items 嵌套）、authentication.proto（LoginRequest.password 固定空串——请求消息的 Redact 方法从不被响应路径调用）、admin/i_user.proto（Create/Update/Delete/UserExists/EditUserPassword 五个 method_skip）。
+- 金样：`crates/proto/tests/golden.rs` 钉了掩码后的字节级 wire 形状（字段序、EmitUnpopulated 空数组、掩码值），以及 method_skip 与无 plan 时不脱敏。
+
 ## 4. 错误信封（`DefaultErrorEncoder`，codec.go:107-118 + errors/errors.go）
 
 - `se := errors.FromError(err)`：

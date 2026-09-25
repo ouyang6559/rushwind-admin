@@ -1,0 +1,30 @@
+# The payment server assembly document: one lifecycle, three transports.
+# The http server carries two hand-written axum surfaces behind its edge (the
+# request budget): `payment-gateway` is the wire-compatible merchant/channel
+# form + `pay_md5sign` endpoints, and `payment-panel` is the logged-in
+# merchant/agent JSON console (session-token auth). The CORS policy is omitted
+# because the gateway is server-to-server form posts + browser redirects, not a
+# credentialed XHR frontend. `payment-tasks` is the apalis queue worker (T+1
+# thaw, daily offline reset, payout auto-submit + query sweeps,
+# complaints-deposit releases), fed by the cron producer below; the platform
+# back-office surface (protobuf + JWT + RBAC) mounts here from later phases.
+app:
+  name: payment
+  version: 0.1.0
+servers:
+  - kind: http
+    bind: ":7790"
+    edge:
+      timeout: 15s
+    route_packs:
+      - name: payment-gateway
+      - name: payment-panel
+  - kind: payment-tasks
+  - kind: cron
+    endpoint: cron://payment
+    jobs:
+      - t1_thaw_scan
+      - offline_daily_reset
+      - payout_submit_sweep
+      - payout_query_sweep
+      - deposit_unfreeze_sweep

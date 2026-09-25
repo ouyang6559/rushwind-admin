@@ -1,0 +1,26 @@
+# The payment service data-plane defaults, compiled into the binary
+# (`src/config.rs`). Out-of-container runs override via env:
+#   RUSHWIND_DATABASE_SOURCE / RUSHWIND_DATABASE_MIGRATE
+#   RUSHWIND_REDIS_ADDR / RUSHWIND_REDIS_PASSWORD / PAYMENT_SITE_URL
+#   PAYMENT_THAW_ALLOW_START / PAYMENT_THAW_ALLOW_END
+data:
+  database:
+    driver: "postgres"
+    source: "host=postgres port=5432 user=postgres password=*Abcd123456 dbname=juhepay sslmode=disable"
+    migrate: true
+
+  redis:
+    addr: "redis:6379"
+    password: "*Abcd123456"
+
+  gateway:
+    # Public base used to assemble legacy notify/callback addresses.
+    site_url: "http://localhost:7790"
+    # websiteconfig.df_api — the platform-wide payout-API kill switch
+    # (Dfpay::add answers 代付API未开启！ while off). Off per the DDL default.
+    df_api: false
+
+  planning:
+    # T+1 thaw cron window (legacy PLANNING allowstart~allowend, §6.2).
+    thaw_allow_start: 1
+    thaw_allow_end: 5

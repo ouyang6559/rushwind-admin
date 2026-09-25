@@ -1,5 +1,4 @@
 //! ApiAuditLogService — List/Get over `sys_api_audit_logs`
-//! .
 
 use std::sync::Arc;
 

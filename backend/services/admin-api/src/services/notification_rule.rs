@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, Set};
 
+use crate::mapping;
 use crate::state::{db_err, operator_of, require_data, status_error, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::notification::service::v1::{
@@ -17,40 +18,38 @@ use proto::proto::notification::service::v1::{
 };
 use proto::proto::pagination::PagingRequest;
 
-fn event_type_str(v: i32) -> Option<&'static str> {
-    Some(match v {
-        1 => "PASSWORD_RESET_CODE",
-        2 => "CONTACT_BIND_CODE",
-        3 => "CHANNEL_TEST_EMAIL",
-        4 => "INTERNAL_MESSAGE",
-        _ => return None,
-    })
-}
-
-fn channel_str(v: i32) -> Option<&'static str> {
-    Some(match v {
-        1 => "EMAIL",
-        2 => "SMS",
-        3 => "WEBHOOK",
-        4 => "INTERNAL",
-        _ => return None,
-    })
-}
-
-fn status_i32(v: &str) -> i32 {
-    match v {
-        "SENT" => 2,
-        "FAILED" => 3,
-        "SKIPPED" => 4,
-        _ => 1, // SENDING
+/// The test-dispatch verdict for a rule: a disabled rule (or one with
+/// no/unknown channel) skips; a channel whose Rust-side outbound is
+/// not ported records FAILED with the honest reason — the same
+/// "SMS routes to it = ledger FAILED" acceptance semantics upstream
+/// uses for its own unported outbounds.
+fn test_dispatch_verdict(
+    rule: &crate::data::sys_notification_rules::Model,
+) -> (&'static str, &'static str) {
+    if !rule.is_enabled.unwrap_or(false) {
+        return ("SKIPPED", "规则已停用");
+    }
+    match rule.channel.as_deref().unwrap_or("") {
+        "EMAIL" => ("FAILED", "Rust 侧 SMTP 出站未移植"),
+        "SMS" => ("FAILED", "短信通道未实现"),
+        "WEBHOOK" => ("FAILED", "Rust 侧 WEBHOOK 出站未移植"),
+        "INTERNAL" => ("FAILED", "Rust 侧站内信出站未移植"),
+        "" => ("SKIPPED", "规则未配置渠道"),
+        _ => ("SKIPPED", "未知渠道"),
     }
 }
 
 fn rule_proto(r: crate::data::sys_notification_rules::Model) -> NotificationRule {
     NotificationRule {
         id: Some(r.id),
-        event_type: r.event_type.as_deref().and_then(event_type_i32_of),
-        channel: r.channel.as_deref().and_then(channel_i32_of),
+        event_type: r
+            .event_type
+            .as_deref()
+            .and_then(mapping::notification_event_type_of),
+        channel: r
+            .channel
+            .as_deref()
+            .and_then(mapping::notification_channel_kind_of),
         is_async: r.is_async,
         is_enabled: r.is_enabled,
         remark: r.remark,
@@ -61,37 +60,18 @@ fn rule_proto(r: crate::data::sys_notification_rules::Model) -> NotificationRule
     }
 }
 
-fn event_type_i32_of(s: &str) -> Option<i32> {
-    Some(match s {
-        "PASSWORD_RESET_CODE" => 1,
-        "CONTACT_BIND_CODE" => 2,
-        "CHANNEL_TEST_EMAIL" => 3,
-        "INTERNAL_MESSAGE" => 4,
-        _ => return None,
-    })
-}
-
-fn channel_i32_of(s: &str) -> Option<i32> {
-    Some(match s {
-        "EMAIL" => 1,
-        "SMS" => 2,
-        "WEBHOOK" => 3,
-        "INTERNAL" => 4,
-        _ => return None,
-    })
-}
-
 fn upsert_fields(
     a: &mut crate::data::sys_notification_rules::ActiveModel,
     data: &NotificationRule,
 ) -> Result<(), StatusError> {
     if let Some(v) = data.event_type {
-        let s =
-            event_type_str(v).ok_or_else(|| status_error("BAD_REQUEST", "unknown event_type"))?;
+        let s = mapping::notification_event_type_str(v)
+            .ok_or_else(|| status_error("BAD_REQUEST", "unknown event_type"))?;
         a.event_type = Set(Some(s.into()));
     }
     if let Some(v) = data.channel {
-        let s = channel_str(v).ok_or_else(|| status_error("BAD_REQUEST", "unknown channel"))?;
+        let s = mapping::notification_channel_kind_str(v)
+            .ok_or_else(|| status_error("BAD_REQUEST", "unknown channel"))?;
         a.channel = Set(Some(s.into()));
     }
     if let Some(v) = data.is_async {
@@ -184,8 +164,7 @@ impl proto::gen::services::NotificationRuleServiceHandlers for NotificationRuleS
                 }
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }
@@ -209,20 +188,7 @@ impl proto::gen::services::NotificationRuleServiceHandlers for NotificationRuleS
         let payload = operator_of(&ctx)?;
         let repo = crate::data::repos::NotificationRuleRepo::new(&self.state.db);
         let rule = repo.get_by_id(req.id).await?;
-
-        // 台账行:规则/渠道停用 → SKIPPED;Rust 侧出站通道未移植 → FAILED 并写明原因。
-        let (status, last_error) = if !rule.is_enabled.unwrap_or(false) {
-            ("SKIPPED", "规则已停用")
-        } else {
-            match rule.channel.as_deref().unwrap_or("") {
-                "EMAIL" => ("FAILED", "Rust 侧 SMTP 出站未移植"),
-                "SMS" => ("FAILED", "短信通道未实现"),
-                "WEBHOOK" => ("FAILED", "Rust 侧 WEBHOOK 出站未移植"),
-                "INTERNAL" => ("FAILED", "Rust 侧站内信出站未移植"),
-                "" => ("SKIPPED", "规则未配置渠道"),
-                _ => ("SKIPPED", "未知渠道"),
-            }
-        };
+        let (status, last_error) = test_dispatch_verdict(&rule);
 
         let delivery = crate::data::repos::NotificationDeliveryRepo::new(&self.state.db)
             .insert(crate::data::sys_notification_deliveries::ActiveModel {
@@ -249,7 +215,7 @@ impl proto::gen::services::NotificationRuleServiceHandlers for NotificationRuleS
 
         Ok(TestDispatchNotificationResponse {
             delivery_id: delivery.id,
-            status: status_i32(status),
+            status: mapping::notification_delivery_status_of(status).unwrap_or(1),
         })
     }
 }

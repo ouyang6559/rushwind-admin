@@ -47,12 +47,6 @@ impl proto::gen::services::RedisCacheMonitorServiceHandlers for RedisCacheMonito
             .query_async(&mut conn)
             .await
             .map_err(|e| crate::state::internal_error(format!("redis info: {e}")))?;
-        let _field = |key: &str| -> Option<u64> {
-            info.lines().find_map(|line| {
-                let (k, v) = line.split_once(':')?;
-                (k == key).then(|| v.trim().parse().ok())?
-            })
-        };
         let db_size: i64 = redis::cmd("DBSIZE")
             .query_async(&mut conn)
             .await

@@ -1,42 +1,23 @@
-//! InternalMessageService / InternalMessageCategoryService /
-//! InternalMessageRecipientService — inbox surface:
-//! denormalized title/content, status RECEIVED immediately), revoke with
-//! recipient cascade, category CRUD, and the user inbox surface.
+//! InternalMessageService — tenant messages: send (with the SSE
+//! recipient fan-out), list/get/update/delete, and revoke with the
+//! recipient cascade.
 
 use std::sync::Arc;
 
-use sea_orm::sea_query::Condition;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
+use crate::mapping;
 use crate::state::{db_err, not_found, operator_of, tenant_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::internal_message::service::v1::{
-    DeleteNotificationFromInboxRequest, GetInternalMessageCategoryRequest,
-    GetInternalMessageRequest, InternalMessage, InternalMessageCategory, InternalMessageRecipient,
-    ListInternalMessageCategoryResponse, ListInternalMessageResponse, ListUserInboxResponse,
-    MarkNotificationAsReadRequest, MarkNotificationsStatusRequest, RevokeMessageRequest,
+    GetInternalMessageRequest, InternalMessage, ListInternalMessageResponse, RevokeMessageRequest,
     SendMessageRequest, SendMessageResponse, UpdateInternalMessageRequest,
 };
 use proto::proto::pagination::PagingRequest;
 
+/// Unknown rows read as DRAFT.
 fn message_status_to_proto(s: &str) -> i32 {
-    match s {
-        "PUBLISHED" => 1,
-        "SCHEDULED" => 2,
-        "REVOKED" => 3,
-        "ARCHIVED" => 4,
-        "DELETED" => 5,
-        _ => 0, // DRAFT
-    }
-}
-
-fn recipient_status_to_proto(s: &str) -> i32 {
-    match s {
-        "READ" => 2,
-        "REVOKED" => 3,
-        "DELETED" => 4,
-        _ => 1, // RECEIVED
-    }
+    mapping::internal_message_status_of(s).unwrap_or(0)
 }
 
 fn message_proto(r: crate::data::internal_messages::Model) -> InternalMessage {
@@ -45,35 +26,15 @@ fn message_proto(r: crate::data::internal_messages::Model) -> InternalMessage {
         title: r.title,
         content: r.content,
         status: r.status.as_deref().map(message_status_to_proto),
-        r#type: r.type_column.as_deref().map(|s| match s {
-            "PRIVATE" => 1,
-            "GROUP" => 2,
-            _ => 0,
-        }),
+        r#type: r
+            .type_column
+            .as_deref()
+            .map(|s| mapping::internal_message_type_of(s).unwrap_or(0)),
         sender_id: r.sender_id,
         sender_name: None,
         category_id: r.category_id,
         category_name: None,
         tenant_id: r.tenant_id,
-        tenant_name: None,
-        created_by: r.created_by,
-        updated_by: r.updated_by,
-        deleted_by: r.deleted_by,
-        created_at: r.created_at.and_then(crate::state::naive_to_ts),
-        updated_at: r.updated_at.and_then(crate::state::naive_to_ts),
-        deleted_at: r.deleted_at.and_then(crate::state::naive_to_ts),
-    }
-}
-
-fn category_proto(r: crate::data::internal_message_categories::Model) -> InternalMessageCategory {
-    InternalMessageCategory {
-        id: Some(r.id),
-        tenant_id: r.tenant_id,
-        name: Some(r.name),
-        code: Some(r.code),
-        icon_url: r.icon_url,
-        is_enabled: r.is_enabled,
-        sort_order: r.sort_order,
         tenant_name: None,
         created_by: r.created_by,
         updated_by: r.updated_by,
@@ -126,10 +87,7 @@ impl proto::gen::services::InternalMessageServiceHandlers for InternalMessageSer
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListInternalMessageResponse, StatusError> {
-        let repo = crate::data::repos::InternalMessageRepo::new(
-            &self.state.db,
-            crate::data::Viewer::from_ctx(&ctx),
-        );
+        let repo = crate::data::repos::InternalMessageRepo::new(&self.state.db);
         let (rows, total) = repo.paged_list(tenant_of(&ctx), &req).await?;
         Ok(ListInternalMessageResponse {
             items: rows.into_iter().map(message_proto).collect(),
@@ -175,8 +133,7 @@ impl proto::gen::services::InternalMessageServiceHandlers for InternalMessageSer
                 a.content = Set(Some(v.clone()));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }
@@ -309,267 +266,6 @@ impl proto::gen::services::InternalMessageServiceHandlers for InternalMessageSer
         a.status = Set(Some("REVOKED".into()));
         a.updated_at = Set(Some(crate::data::now()));
         a.update(&self.state.db).await.map_err(db_err)?;
-        Ok(Empty {})
-    }
-}
-
-pub struct InternalMessageCategoryService {
-    pub state: Arc<AppState>,
-}
-
-#[async_trait::async_trait]
-impl proto::gen::services::InternalMessageCategoryServiceHandlers
-    for InternalMessageCategoryService
-{
-    async fn list(
-        &self,
-        ctx: rushwind_http_binding::ctx::RequestContext,
-        req: PagingRequest,
-    ) -> Result<ListInternalMessageCategoryResponse, StatusError> {
-        let tid = tenant_of(&ctx);
-        let repo = crate::data::repos::InternalMessageCategoryRepo::new(&self.state.db);
-        let (rows, total) = repo.paged_list(tid, &req).await?;
-        Ok(ListInternalMessageCategoryResponse {
-            items: rows.into_iter().map(category_proto).collect(),
-            total,
-        })
-    }
-
-    async fn get(
-        &self,
-        ctx: rushwind_http_binding::ctx::RequestContext,
-        req: GetInternalMessageCategoryRequest,
-    ) -> Result<InternalMessageCategory, StatusError> {
-        let id = crate::query_by_id!(req.query_by, proto::proto::internal_message::service::v1::get_internal_message_category_request::QueryBy);
-        let scope = crate::data::Viewer::from_ctx(&ctx).tenant_scope();
-        let repo = crate::data::repos::InternalMessageCategoryRepo::new(&self.state.db);
-        let row = repo
-            .find_scoped(id, scope)
-            .await?
-            .ok_or_else(|| not_found("message category"))?;
-        Ok(category_proto(row))
-    }
-
-    async fn create(
-        &self,
-        ctx: rushwind_http_binding::ctx::RequestContext,
-        req: proto::proto::internal_message::service::v1::CreateInternalMessageCategoryRequest,
-    ) -> Result<Empty, StatusError> {
-        let payload = operator_of(&ctx)?;
-        let data = crate::state::require_data(req.data)?;
-        crate::data::internal_message_categories::ActiveModel {
-            tenant_id: Set(Some(payload.tenant_id)),
-            name: Set(data.name.unwrap_or_default()),
-            code: Set(data.code.unwrap_or_default()),
-            icon_url: Set(data.icon_url),
-            is_enabled: Set(data.is_enabled.or(Some(true))),
-            sort_order: Set(data.sort_order.or(Some(0))),
-            created_by: Set(Some(payload.user_id)),
-            created_at: Set(Some(crate::data::now())),
-            updated_at: Set(Some(crate::data::now())),
-            ..Default::default()
-        }
-        .insert(&self.state.db)
-        .await
-        .map_err(db_err)?;
-        Ok(Empty {})
-    }
-
-    async fn update(
-        &self,
-        ctx: rushwind_http_binding::ctx::RequestContext,
-        req: proto::proto::internal_message::service::v1::UpdateInternalMessageCategoryRequest,
-    ) -> Result<Empty, StatusError> {
-        let payload = operator_of(&ctx)?;
-        let scope = crate::data::Viewer::from_ctx(&ctx).tenant_scope();
-        let repo = crate::data::repos::InternalMessageCategoryRepo::new(&self.state.db);
-        let row = repo
-            .find_scoped(req.id, scope)
-            .await?
-            .ok_or_else(|| not_found("message category"))?;
-        let mut a: crate::data::internal_message_categories::ActiveModel = row.into();
-        if let Some(data) = &req.data {
-            if let Some(v) = &data.name {
-                a.name = Set(v.clone());
-            }
-            if let Some(v) = &data.icon_url {
-                a.icon_url = Set(Some(v.clone()));
-            }
-            if let Some(v) = data.is_enabled {
-                a.is_enabled = Set(Some(v));
-            }
-            if let Some(v) = data.sort_order {
-                a.sort_order = Set(Some(v));
-            }
-        }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
-        a.update(&self.state.db).await.map_err(db_err)?;
-        Ok(Empty {})
-    }
-
-    async fn delete(
-        &self,
-        ctx: rushwind_http_binding::ctx::RequestContext,
-        req: proto::proto::internal_message::service::v1::DeleteInternalMessageCategoryRequest,
-    ) -> Result<Empty, StatusError> {
-        let id = crate::query_by_id!(req.query_by, proto::proto::internal_message::service::v1::delete_internal_message_category_request::QueryBy);
-        let scope = crate::data::Viewer::from_ctx(&ctx).tenant_scope();
-        let repo = crate::data::repos::InternalMessageCategoryRepo::new(&self.state.db);
-        repo.delete_scoped(id, scope).await?;
-        Ok(Empty {})
-    }
-}
-
-pub struct InternalMessageRecipientService {
-    pub state: Arc<AppState>,
-}
-
-#[async_trait::async_trait]
-impl proto::gen::services::InternalMessageRecipientServiceHandlers
-    for InternalMessageRecipientService
-{
-    async fn list_user_inbox(
-        &self,
-        ctx: rushwind_http_binding::ctx::RequestContext,
-        req: PagingRequest,
-    ) -> Result<ListUserInboxResponse, StatusError> {
-        let payload = operator_of(&ctx)?;
-        let repo = crate::data::repos::InternalMessageRecipientRepo::new(
-            &self.state.db,
-            crate::data::Viewer::from_ctx(&ctx),
-        );
-        let (rows, total) = repo.paged_inbox(payload.user_id, &req).await?;
-        // One IN query backfills the messages (N+1 guard).
-        let message_ids: Vec<u32> = rows.iter().filter_map(|r| r.message_id).collect();
-        let messages: std::collections::HashMap<u32, crate::data::internal_messages::Model> =
-            if message_ids.is_empty() {
-                Default::default()
-            } else {
-                crate::data::internal_messages::Entity::find()
-                    .filter(crate::data::internal_messages::Column::Id.is_in(message_ids))
-                    .all(&self.state.db)
-                    .await
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|m| (m.id, m))
-                    .collect()
-            };
-        let items: Vec<InternalMessageRecipient> = rows
-            .into_iter()
-            .map(|r| {
-                let message = r.message_id.and_then(|mid| messages.get(&mid));
-                InternalMessageRecipient {
-                    id: Some(r.id),
-                    recipient_user_id: r.recipient_user_id,
-                    message_id: r.message_id,
-                    status: r.status.as_deref().map(recipient_status_to_proto),
-                    received_at: r.received_at.and_then(crate::state::naive_to_ts),
-                    read_at: r.read_at.and_then(crate::state::naive_to_ts),
-                    // Denormalized title/content copied at send time; the
-                    // backfilled message row fills gaps.
-                    title: message.and_then(|m| m.title.clone()),
-                    content: message.and_then(|m| m.content.clone()),
-                    tenant_id: r.tenant_id,
-                    tenant_name: None,
-                    created_by: r.created_by,
-                    updated_by: r.updated_by,
-                    deleted_by: r.deleted_by,
-                    created_at: r.created_at.and_then(crate::state::naive_to_ts),
-                    updated_at: r.updated_at.and_then(crate::state::naive_to_ts),
-                    deleted_at: r.deleted_at.and_then(crate::state::naive_to_ts),
-                }
-            })
-            .collect();
-        Ok(ListUserInboxResponse { items, total })
-    }
-
-    async fn delete_notification_from_inbox(
-        &self,
-        ctx: rushwind_http_binding::ctx::RequestContext,
-        req: DeleteNotificationFromInboxRequest,
-    ) -> Result<Empty, StatusError> {
-        let payload = operator_of(&ctx)?;
-        crate::data::internal_message_recipients::Entity::delete_many()
-            .filter(
-                Condition::all()
-                    .add(
-                        crate::data::internal_message_recipients::Column::RecipientUserId
-                            .eq(payload.user_id),
-                    )
-                    .add(
-                        crate::data::internal_message_recipients::Column::Id
-                            .is_in(req.recipient_ids),
-                    ),
-            )
-            .exec(&self.state.db)
-            .await
-            .map_err(db_err)?;
-        Ok(Empty {})
-    }
-
-    async fn mark_notification_as_read(
-        &self,
-        ctx: rushwind_http_binding::ctx::RequestContext,
-        req: MarkNotificationAsReadRequest,
-    ) -> Result<Empty, StatusError> {
-        let payload = operator_of(&ctx)?;
-        crate::data::internal_message_recipients::Entity::update_many()
-            .col_expr(
-                crate::data::internal_message_recipients::Column::Status,
-                sea_orm::sea_query::Expr::value("READ"),
-            )
-            .col_expr(
-                crate::data::internal_message_recipients::Column::ReadAt,
-                sea_orm::sea_query::Expr::value(crate::data::now()),
-            )
-            .filter(
-                Condition::all()
-                    .add(
-                        crate::data::internal_message_recipients::Column::RecipientUserId
-                            .eq(payload.user_id),
-                    )
-                    .add(
-                        crate::data::internal_message_recipients::Column::Id
-                            .is_in(req.recipient_ids),
-                    ),
-            )
-            .exec(&self.state.db)
-            .await
-            .map_err(db_err)?;
-        Ok(Empty {})
-    }
-
-    async fn mark_notifications_status(
-        &self,
-        ctx: rushwind_http_binding::ctx::RequestContext,
-        req: MarkNotificationsStatusRequest,
-    ) -> Result<Empty, StatusError> {
-        let payload = operator_of(&ctx)?;
-        let status = match req.new_status {
-            2 => "READ",
-            4 => "DELETED",
-            _ => "RECEIVED",
-        };
-        crate::data::internal_message_recipients::Entity::update_many()
-            .col_expr(
-                crate::data::internal_message_recipients::Column::Status,
-                sea_orm::sea_query::Expr::value(status),
-            )
-            .filter(
-                Condition::all()
-                    .add(
-                        crate::data::internal_message_recipients::Column::RecipientUserId
-                            .eq(payload.user_id),
-                    )
-                    .add(
-                        crate::data::internal_message_recipients::Column::Id
-                            .is_in(req.recipient_ids),
-                    ),
-            )
-            .exec(&self.state.db)
-            .await
-            .map_err(db_err)?;
         Ok(Empty {})
     }
 }

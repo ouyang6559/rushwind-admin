@@ -129,8 +129,7 @@ impl proto::gen::services::PermissionGroupServiceHandlers for PermissionGroupSer
                 a.status = Set(Some(if v == 0 { "OFF".into() } else { "ON".into() }));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }

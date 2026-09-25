@@ -5,25 +5,6 @@ use sea_orm::sea_query::Condition;
 use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::data::sys_notification_channels as entity;
-use crate::state::{db_err, StatusError};
+use crate::state::{db_err, not_found, StatusError};
 
-repo_shell!(global NotificationChannelRepo, entity);
-
-impl<'a> NotificationChannelRepo<'a> {
-    pub async fn get_by_id(&self, id: u32) -> Result<entity::Model, StatusError> {
-        let query = entity::Entity::find_by_id(id);
-        query
-            .one(self.db)
-            .await
-            .map_err(db_err)?
-            .ok_or_else(|| StatusError::new(404, "NOT_FOUND", "notification channel not found"))
-    }
-
-    pub async fn delete_by_id(&self, id: u32) -> Result<(), StatusError> {
-        entity::Entity::delete_by_id(id)
-            .exec(self.db)
-            .await
-            .map_err(db_err)?;
-        Ok(())
-    }
-}
+repo_shell!(global NotificationChannelRepo, entity, "notification channel");

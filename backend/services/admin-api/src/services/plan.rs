@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
+use crate::mapping;
 use crate::state::{db_err, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::identity::service::v1::{
@@ -15,60 +16,36 @@ use proto::proto::identity::service::v1::{
 };
 use proto::proto::pagination::PagingRequest;
 
+/// Unknown rows read as FREE.
 fn plan_version_to_str(v: i32) -> String {
-    match v {
-        1 => "STANDARD".into(),
-        2 => "ENTERPRISE".into(),
-        _ => "FREE".into(),
-    }
+    mapping::plan_version_str(v).unwrap_or("FREE").into()
 }
 
 fn plan_version_to_proto(s: &str) -> i32 {
-    match s {
-        "STANDARD" => 1,
-        "ENTERPRISE" => 2,
-        _ => 0,
-    }
+    mapping::plan_version_of(s).unwrap_or(0)
 }
 
+/// Unknown rows read as READONLY.
 fn expiry_policy_to_proto(s: &str) -> i32 {
-    match s {
-        "BLOCK_LOGIN" => 1,
-        "FREEZE" => 2,
-        _ => 0, // READONLY
-    }
+    mapping::plan_expiry_policy_of(s).unwrap_or(0)
 }
 
 fn expiry_policy_to_str(v: i32) -> String {
-    match v {
-        1 => "BLOCK_LOGIN".into(),
-        2 => "FREEZE".into(),
-        _ => "READONLY".into(),
-    }
+    mapping::plan_expiry_policy_str(v)
+        .unwrap_or("READONLY")
+        .into()
 }
 
+/// Unknown rows read as SYSTEM.
 fn module_to_str(v: i32) -> String {
-    match v {
-        1 => "DASHBOARD".into(),
-        2 => "OPM".into(),
-        3 => "SYSTEM".into(),
-        4 => "DICT".into(),
-        5 => "TENANT".into(),
-        6 => "PERMISSION".into(),
-        7 => "LOG".into(),
-        8 => "INTERNAL_MESSAGE".into(),
-        9 => "FILE".into(),
-        10 => "TASK".into(),
-        _ => "SYSTEM".into(),
-    }
+    mapping::menu_module_str(v).unwrap_or("SYSTEM").into()
 }
 
+/// Unknown rows read as USER_LIMIT.
 fn quota_type_to_str(v: i32) -> String {
-    match v {
-        1 => "STORAGE".into(),
-        2 => "API_CALL".into(),
-        _ => "USER_LIMIT".into(),
-    }
+    mapping::plan_quota_type_str(v)
+        .unwrap_or("USER_LIMIT")
+        .into()
 }
 
 fn plan_proto(r: crate::data::sys_plans::Model) -> Plan {
@@ -93,19 +70,10 @@ fn plan_module_proto(r: crate::data::sys_plan_modules::Model) -> PlanModule {
     PlanModule {
         id: Some(r.id),
         plan_id: Some(r.plan_id),
-        module: r.module.as_deref().map(|s| match s {
-            "OPM" => 2,
-            "SYSTEM" => 3,
-            "DICT" => 4,
-            "TENANT" => 5,
-            "PERMISSION" => 6,
-            "LOG" => 7,
-            "INTERNAL_MESSAGE" => 8,
-            "FILE" => 9,
-            "TASK" => 10,
-            "DASHBOARD" => 1,
-            _ => 0,
-        }),
+        module: r
+            .module
+            .as_deref()
+            .map(|s| mapping::menu_module_of(s).unwrap_or(0)),
         created_by: r.created_by,
         updated_by: r.updated_by,
         deleted_by: r.deleted_by,
@@ -119,11 +87,10 @@ fn plan_quota_proto(r: crate::data::sys_plan_quotas::Model) -> PlanQuota {
     PlanQuota {
         id: Some(r.id),
         plan_id: Some(r.plan_id),
-        quota_type: r.quota_type.as_deref().map(|s| match s {
-            "STORAGE" => 1,
-            "API_CALL" => 2,
-            _ => 0,
-        }),
+        quota_type: r
+            .quota_type
+            .as_deref()
+            .map(|s| mapping::plan_quota_type_of(s).unwrap_or(0)),
         quota_value: r.quota_value.map(|v| v as u64),
         created_by: r.created_by,
         updated_by: r.updated_by,
@@ -145,7 +112,7 @@ impl proto::gen::services::PlanServiceHandlers for PlanService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListPlanResponse, StatusError> {
-        let repo = crate::data::repos::PlanRepo::new(&self.state.db, crate::data::Viewer::system());
+        let repo = crate::data::repos::PlanRepo::new(&self.state.db);
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListPlanResponse {
             items: rows.into_iter().map(plan_proto).collect(),
@@ -227,8 +194,7 @@ impl proto::gen::services::PlanServiceHandlers for PlanService {
                 a.remark = Set(Some(v.clone()));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }
@@ -272,8 +238,7 @@ impl proto::gen::services::PlanModuleServiceHandlers for PlanModuleService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListPlanModuleResponse, StatusError> {
-        let repo =
-            crate::data::repos::PlanModuleRepo::new(&self.state.db, crate::data::Viewer::system());
+        let repo = crate::data::repos::PlanModuleRepo::new(&self.state.db);
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListPlanModuleResponse {
             items: rows.into_iter().map(plan_module_proto).collect(),
@@ -336,8 +301,7 @@ impl proto::gen::services::PlanModuleServiceHandlers for PlanModuleService {
                 a.module = Set(Some(module_to_str(v)));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }
@@ -370,8 +334,7 @@ impl proto::gen::services::PlanQuotaServiceHandlers for PlanQuotaService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListPlanQuotaResponse, StatusError> {
-        let repo =
-            crate::data::repos::PlanQuotaRepo::new(&self.state.db, crate::data::Viewer::system());
+        let repo = crate::data::repos::PlanQuotaRepo::new(&self.state.db);
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListPlanQuotaResponse {
             items: rows.into_iter().map(plan_quota_proto).collect(),
@@ -418,8 +381,7 @@ impl proto::gen::services::PlanQuotaServiceHandlers for PlanQuotaService {
                 a.quota_value = Set(Some(v as i64));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }

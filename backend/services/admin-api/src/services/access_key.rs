@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, Set};
 
 use pbjson_types::Empty;
 use proto::gen::services::AccessKeyServiceHandlers;
@@ -82,24 +82,22 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         req: GetAccessKeyRequest,
     ) -> Result<AccessKey, crate::state::StatusError> {
         let payload = crate::state::operator_of(&ctx)?;
-        let query = crate::data::sys_access_keys::Entity::find()
-            .filter(crate::data::sys_access_keys::Column::TenantId.eq(payload.tenant_id));
+        let repo = crate::data::repos::AccessKeyRepo::new(
+            &self.state.db,
+            crate::data::Viewer::from_ctx(&ctx),
+        );
         let row = match req.query_by {
             Some(proto::proto::access_key::service::v1::get_access_key_request::QueryBy::Id(
                 id,
-            )) => crate::data::sys_access_keys::Entity::find_by_id(id)
-                .one(&self.state.db)
-                .await
-                .map_err(|e| internal_error(format!("db: {e}")))?,
+            )) => Some(repo.get_by_id(id).await?),
             Some(
                 proto::proto::access_key::service::v1::get_access_key_request::QueryBy::AccessKey(
                     ak,
                 ),
-            ) => query
-                .filter(crate::data::sys_access_keys::Column::AccessKey.eq(ak))
-                .one(&self.state.db)
-                .await
-                .map_err(|e| internal_error(format!("db: {e}")))?,
+            ) => {
+                repo.find_by_access_key_for_tenant(payload.tenant_id, &ak)
+                    .await?
+            }
             None => None,
         }
         .ok_or_else(|| status_error("ACCESS_KEY_NOT_FOUND", "access key not found"))?;
@@ -142,13 +140,12 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         req: UpdateAccessKeyRequest,
     ) -> Result<Empty, crate::state::StatusError> {
         let payload = crate::state::operator_of(&ctx)?;
-        let row = crate::data::sys_access_keys::Entity::find_by_id(req.id)
-            .filter(crate::data::sys_access_keys::Column::TenantId.eq(payload.tenant_id))
-            .one(&self.state.db)
-            .await
-            .map_err(|e| internal_error(format!("db: {e}")))?
-            .ok_or_else(|| status_error("ACCESS_KEY_NOT_FOUND", "access key not found"))?;
-        let mut active: crate::data::sys_access_keys::ActiveModel = row.into();
+        let repo = crate::data::repos::AccessKeyRepo::new(
+            &self.state.db,
+            crate::data::Viewer::from_ctx(&ctx),
+        );
+        let mut active: crate::data::sys_access_keys::ActiveModel =
+            repo.get_by_id(req.id).await?.into();
         if let Some(data) = &req.data {
             if let Some(name) = &data.name {
                 active.name = Set(name.clone());
@@ -164,8 +161,7 @@ impl AccessKeyServiceHandlers for AccessKeyService {
                 }));
             }
         }
-        active.updated_by = Set(Some(payload.user_id));
-        active.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(active, payload.user_id);
         active
             .update(&self.state.db)
             .await
@@ -179,11 +175,12 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         req: DeleteAccessKeyRequest,
     ) -> Result<Empty, crate::state::StatusError> {
         let _payload = crate::state::operator_of(&ctx)?;
-        let id = req.id;
-        crate::data::sys_access_keys::Entity::delete_by_id(id)
-            .exec(&self.state.db)
-            .await
-            .map_err(|e| internal_error(format!("db: {e}")))?;
+        let repo = crate::data::repos::AccessKeyRepo::new(
+            &self.state.db,
+            crate::data::Viewer::from_ctx(&ctx),
+        );
+        repo.get_by_id(req.id).await?;
+        repo.delete_by_id(req.id).await?;
         Ok(Empty {})
     }
 
@@ -193,17 +190,15 @@ impl AccessKeyServiceHandlers for AccessKeyService {
         req: ResetAccessKeySecretRequest,
     ) -> Result<CreateAccessKeyResponse, crate::state::StatusError> {
         let payload = crate::state::operator_of(&ctx)?;
-        let row = crate::data::sys_access_keys::Entity::find_by_id(req.id)
-            .filter(crate::data::sys_access_keys::Column::TenantId.eq(payload.tenant_id))
-            .one(&self.state.db)
-            .await
-            .map_err(|e| internal_error(format!("db: {e}")))?
-            .ok_or_else(|| status_error("ACCESS_KEY_NOT_FOUND", "access key not found"))?;
+        let repo = crate::data::repos::AccessKeyRepo::new(
+            &self.state.db,
+            crate::data::Viewer::from_ctx(&ctx),
+        );
         let secret = new_secret();
-        let mut active: crate::data::sys_access_keys::ActiveModel = row.into();
+        let mut active: crate::data::sys_access_keys::ActiveModel =
+            repo.get_by_id(req.id).await?.into();
         active.secret_hash = Set(crate::crypto::sha256_hex(secret.as_bytes()));
-        active.updated_by = Set(Some(payload.user_id));
-        active.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(active, payload.user_id);
         let updated = active
             .update(&self.state.db)
             .await
@@ -229,11 +224,12 @@ impl AccessKeyServiceHandlers for AccessKeyService {
                 "too many failures, please try again later",
             ));
         }
-        let row = crate::data::sys_access_keys::Entity::find()
-            .filter(crate::data::sys_access_keys::Column::AccessKey.eq(req.access_key.clone()))
-            .one(&self.state.db)
-            .await
-            .map_err(|e| internal_error(format!("db: {e}")))?;
+        let row = crate::data::repos::AccessKeyRepo::new(
+            &self.state.db,
+            crate::data::Viewer::from_ctx(&ctx),
+        )
+        .find_by_access_key(&req.access_key.clone())
+        .await?;
         let Some(row) = row else {
             crate::ratelimit::check_and_incr(&self.state.redis, &ctx.ip, &req.access_key).await;
             return Err(status_error("BAD_REQUEST", "invalid access key or secret"));

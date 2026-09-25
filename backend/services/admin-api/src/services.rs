@@ -13,6 +13,8 @@ mod dict_entry;
 mod dict_type;
 mod file;
 mod internal_message;
+mod internal_message_category;
+mod internal_message_recipient;
 mod language;
 mod login_audit_log;
 mod login_policy;
@@ -39,9 +41,7 @@ mod user;
 mod user_profile;
 
 pub use access_key::AccessKeyService;
-pub use admin_portal::{
-    load_user, menu_meta_from_json, menu_meta_to_json, user_to_proto, AdminPortalService,
-};
+pub use admin_portal::AdminPortalService;
 pub use api::ApiService;
 pub use api_audit_log::ApiAuditLogService;
 pub use authentication::AuthenticationService;
@@ -51,9 +51,9 @@ pub use data_access_audit_log::DataAccessAuditLogService;
 pub use dict_entry::DictEntryService;
 pub use dict_type::DictTypeService;
 pub use file::{image_proxy, FileService, FileTransferService};
-pub use internal_message::{
-    InternalMessageCategoryService, InternalMessageRecipientService, InternalMessageService,
-};
+pub use internal_message::InternalMessageService;
+pub use internal_message_category::InternalMessageCategoryService;
+pub use internal_message_recipient::InternalMessageRecipientService;
 pub use language::LanguageService;
 pub use login_audit_log::LoginAuditLogService;
 pub use login_policy::LoginPolicyService;

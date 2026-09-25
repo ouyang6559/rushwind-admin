@@ -4,51 +4,32 @@
 
 use std::sync::Arc;
 
+use crate::mapping;
 use crate::state::{AppState, StatusError};
 use proto::proto::notification::service::v1::{
     GetNotificationDeliveryRequest, ListNotificationDeliveryResponse, NotificationDelivery,
 };
 use proto::proto::pagination::PagingRequest;
 
-fn status_i32(v: &str) -> i32 {
-    match v {
-        "SENT" => 2,
-        "FAILED" => 3,
-        "SKIPPED" => 4,
-        _ => 1,
-    }
-}
-
-fn channel_i32_of(s: &str) -> Option<i32> {
-    Some(match s {
-        "EMAIL" => 1,
-        "SMS" => 2,
-        "WEBHOOK" => 3,
-        "INTERNAL" => 4,
-        _ => return None,
-    })
-}
-
-fn event_type_i32_of(s: &str) -> Option<i32> {
-    Some(match s {
-        "PASSWORD_RESET_CODE" => 1,
-        "CONTACT_BIND_CODE" => 2,
-        "CHANNEL_TEST_EMAIL" => 3,
-        "INTERNAL_MESSAGE" => 4,
-        _ => return None,
-    })
-}
-
 fn delivery_proto(r: crate::data::sys_notification_deliveries::Model) -> NotificationDelivery {
     NotificationDelivery {
         id: Some(r.id),
-        event_type: r.event_type.as_deref().and_then(event_type_i32_of),
-        channel: r.channel.as_deref().and_then(channel_i32_of),
+        event_type: r
+            .event_type
+            .as_deref()
+            .and_then(mapping::notification_event_type_of),
+        channel: r
+            .channel
+            .as_deref()
+            .and_then(mapping::notification_channel_kind_of),
         channel_id: r.channel_id,
         recipient_user_id: r.recipient_user_id,
         related_id: r.related_id,
         target: r.target,
-        status: r.status.as_deref().map(status_i32),
+        status: r
+            .status
+            .as_deref()
+            .map(|s| mapping::notification_delivery_status_of(s).unwrap_or(1)),
         last_error: r.last_error,
         sent_at: None,
         request_id: r.request_id,

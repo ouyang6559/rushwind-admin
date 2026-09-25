@@ -11,6 +11,7 @@ pub mod config;
 pub mod crypto;
 pub mod data;
 pub(crate) mod macros;
+pub(crate) mod mapping;
 pub mod migration;
 pub mod paging;
 pub mod policy;
@@ -22,3 +23,4 @@ pub mod state;
 pub mod token;
 
 pub(crate) use macros::query_by_id;
+pub(crate) use macros::stamp_update;

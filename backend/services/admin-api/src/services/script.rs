@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, Set};
 
+use crate::mapping;
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::pagination::PagingRequest;
@@ -16,20 +17,13 @@ use proto::proto::script::service::v1::{
     UpdateScriptRequest,
 };
 
+/// Unknown rows read as LUA.
 fn language_to_proto(s: &str) -> i32 {
-    if s == "JAVASCRIPT" {
-        1
-    } else {
-        0
-    }
+    mapping::script_language_of(s).unwrap_or(0)
 }
 
 fn language_to_str(v: i32) -> String {
-    if v == 1 {
-        "JAVASCRIPT".into()
-    } else {
-        "LUA".into()
-    }
+    mapping::script_language_str(v).unwrap_or("LUA").into()
 }
 
 fn script_proto(r: crate::data::sys_scripts::Model) -> Script {
@@ -80,8 +74,7 @@ impl proto::gen::services::ScriptServiceHandlers for ScriptService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: PagingRequest,
     ) -> Result<ListScriptsResponse, StatusError> {
-        let repo =
-            crate::data::repos::ScriptRepo::new(&self.state.db, crate::data::Viewer::system());
+        let repo = crate::data::repos::ScriptRepo::new(&self.state.db);
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListScriptsResponse {
             items: rows.into_iter().map(script_proto).collect(),
@@ -181,8 +174,7 @@ impl proto::gen::services::ScriptServiceHandlers for ScriptService {
                 a.hook_point = Set(Some(v.clone()));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         if version_bump {
             a.version = Set(Some(a.version.clone().unwrap().unwrap_or(1) + 1));
         }
@@ -258,8 +250,7 @@ impl proto::gen::services::ScriptLogServiceHandlers for ScriptLogService {
     ) -> Result<ListScriptLogsResponse, StatusError> {
         // ScriptLogRepo owns the newest-first ordering; paged_list applies
         // the PagingRequest slice.
-        let repo =
-            crate::data::repos::ScriptLogRepo::new(&self.state.db, crate::data::Viewer::system());
+        let repo = crate::data::repos::ScriptLogRepo::new(&self.state.db);
         let (rows, total) = repo.paged_list(&req).await?;
         Ok(ListScriptLogsResponse {
             items: rows.into_iter().map(script_log_proto).collect(),

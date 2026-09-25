@@ -2,28 +2,26 @@
 //! all predicates owned here (never ad-hoc in services).
 
 use sea_orm::sea_query::Condition;
-use sea_orm::{DatabaseConnection, EntityTrait, QueryFilter};
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::data::sys_languages as entity;
-use crate::state::{db_err, StatusError};
+use crate::state::{db_err, not_found, StatusError};
 
-repo_shell!(global LanguageRepo, entity);
+repo_shell!(global LanguageRepo, entity, "language");
 
 impl<'a> LanguageRepo<'a> {
-    pub async fn get_by_id(&self, id: u32) -> Result<entity::Model, StatusError> {
-        let query = entity::Entity::find_by_id(id);
-        query
+    /// The id behind a language-code lookup (Get's query_by=code).
+    pub async fn find_id_by_code(&self, code: &str) -> Result<Option<u32>, StatusError> {
+        entity::Entity::find()
+            .filter(entity::Column::LanguageCode.eq(code))
             .one(self.db)
             .await
-            .map_err(db_err)?
-            .ok_or_else(|| StatusError::new(404, "NOT_FOUND", "language not found"))
+            .map_err(db_err)
+            .map(|row| row.map(|row| row.id))
     }
 
-    pub async fn delete_by_id(&self, id: u32) -> Result<(), StatusError> {
-        entity::Entity::delete_by_id(id)
-            .exec(self.db)
-            .await
-            .map_err(db_err)?;
-        Ok(())
+    /// One insert, shared by create and batch_create.
+    pub async fn insert(&self, row: entity::ActiveModel) -> Result<entity::Model, StatusError> {
+        ActiveModelTrait::insert(row, self.db).await.map_err(db_err)
     }
 }

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 
+use crate::mapping;
 use crate::state::{db_err, internal_error, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::pagination::PagingRequest;
@@ -57,19 +58,10 @@ fn api_proto(r: crate::data::sys_apis::Model) -> Api {
         method: r.method,
         module: r.module,
         module_description: r.module_description,
-        business_module: r.business_module.as_deref().map(|m| match m {
-            "DASHBOARD" => 1,
-            "OPM" => 2,
-            "SYSTEM" => 3,
-            "DICT" => 4,
-            "TENANT" => 5,
-            "PERMISSION" => 6,
-            "LOG" => 7,
-            "INTERNAL_MESSAGE" => 8,
-            "FILE" => 9,
-            "TASK" => 10,
-            _ => 0,
-        }),
+        business_module: r
+            .business_module
+            .as_deref()
+            .map(|m| mapping::menu_module_of(m).unwrap_or(0)),
         description: r.description,
         scope: r.scope.as_deref().map(|s| if s == "APP" { 2 } else { 1 }),
         status: r.status.as_deref().map(crate::state::status_to_proto),
@@ -194,8 +186,7 @@ impl proto::gen::services::ApiServiceHandlers for ApiService {
                 a.status = Set(Some(if v == 0 { "OFF".into() } else { "ON".into() }));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }

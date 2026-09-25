@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
+use crate::mapping;
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::config::service::v1::{
@@ -24,12 +25,9 @@ fn value_type_to_str(v: i32) -> Option<String> {
     }
 }
 
+/// Unknown rows read as the string variant (1).
 fn value_type_to_proto(s: &str) -> i32 {
-    match s {
-        "BOOL" => 2,
-        "INT" => 3,
-        _ => 1,
-    }
+    mapping::config_value_type_of(s).unwrap_or(1)
 }
 
 fn config_proto(r: crate::data::sys_configs::Model) -> Config {
@@ -161,8 +159,7 @@ impl proto::gen::services::ConfigServiceHandlers for ConfigService {
                 if let Some(v) = value_type {
                     a.value_type = Set(Some(v));
                 }
-                a.updated_by = Set(Some(payload.user_id));
-                a.updated_at = Set(Some(crate::data::now()));
+                crate::stamp_update!(a, payload.user_id);
                 a.update(&self.state.db).await.map_err(db_err)?;
             }
             None => return Err(not_found("config")),

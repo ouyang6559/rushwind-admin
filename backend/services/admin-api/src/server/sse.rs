@@ -42,7 +42,6 @@ use serde::Deserialize;
 use tokio::sync::broadcast;
 
 use crate::state::{status_error, AppState, StatusError};
-use crate::token::UserTokenPayload;
 
 /// The in-process notification hub: senders publish (userId, json);
 /// every SSE connection subscribed filters to its own stream.
@@ -234,9 +233,6 @@ pub fn publish_recipient(hub: &Hub, payload: &NotificationPayload) {
     });
     hub.publish(payload.recipient_user_id, json.to_string());
 }
-
-#[allow(dead_code)]
-fn _claims_shape(_: &UserTokenPayload) {}
 
 /// The sse transport wire (the factory's settings node): the listener
 /// address (the standard form or the host-any `":port"` form) and the

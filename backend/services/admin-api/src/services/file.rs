@@ -11,6 +11,7 @@ use std::sync::Arc;
 use sea_orm::sea_query::Condition;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
+use crate::mapping;
 use crate::state::{
     db_err, internal_error, not_found, operator_of, status_error, AppState, StatusError,
 };
@@ -24,11 +25,9 @@ use proto::proto::storage::service::v1::{
 /// oss.MaxUploadSize (pkg/oss/module).
 const MAX_UPLOAD_SIZE: usize = 50 * 1024 * 1024;
 
+/// Unknown rows read as the zero provider (LOCAL).
 fn provider_to_proto(s: &str) -> i32 {
-    match s {
-        "MINIO" => 1,
-        _ => 0,
-    }
+    mapping::file_provider_of(s).unwrap_or(0)
 }
 
 fn file_proto(r: crate::data::files::Model) -> File {
@@ -315,8 +314,7 @@ impl proto::gen::services::FileServiceHandlers for FileService {
                 a.file_name = Set(Some(v.clone()));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }

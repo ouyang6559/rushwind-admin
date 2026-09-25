@@ -9,6 +9,7 @@ use std::sync::Arc;
 use sea_orm::sea_query::Condition;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
+use crate::mapping;
 use crate::state::{
     db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
@@ -32,11 +33,10 @@ fn task_proto(r: crate::data::sys_tasks::Model) -> Task {
     Task {
         id: Some(r.id),
         tenant_id: r.tenant_id,
-        r#type: r.type_column.as_deref().map(|s| match s {
-            "DELAY" => 1,
-            "WAIT_RESULT" => 2,
-            _ => 0, // PERIODIC
-        }),
+        r#type: r
+            .type_column
+            .as_deref()
+            .map(|s| mapping::task_type_of(s).unwrap_or(0)),
         type_name: Some(r.type_name),
         task_payload: r.task_payload.as_ref().map(|v| v.to_string()),
         cron_spec: r.cron_spec,
@@ -241,8 +241,7 @@ impl proto::gen::services::TaskServiceHandlers for TaskService {
                 a.remark = Set(Some(v.clone()));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }

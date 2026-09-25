@@ -10,6 +10,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::data::repos::UserRepo;
 use crate::data::Viewer;
+use crate::mapping;
 use crate::state::{
     db_err, internal_error, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
@@ -20,15 +21,12 @@ use proto::proto::identity::service::v1::{
 };
 use proto::proto::pagination::PagingRequest;
 
-use crate::services::user_to_proto;
-
 pub struct UserService {
     pub state: Arc<AppState>,
 }
 
 impl UserService {
     /// The viewer-driven repo: tenancy predicates live in the repo, not here.
-    #[allow(dead_code)] // staged for the remaining method migrations
     fn repo<'a>(&'a self, ctx: &rushwind_http_binding::ctx::RequestContext) -> UserRepo<'a> {
         UserRepo::new(&self.state.db, Viewer::from_ctx(ctx))
     }
@@ -234,7 +232,7 @@ impl proto::gen::services::UserServiceHandlers for UserService {
             None => None,
         }
         .ok_or_else(|| not_found("user"))?;
-        let (_, codes) = crate::services::load_user(&self.state, row.id).await?;
+        let (_, codes) = load_user(&self.state, row.id).await?;
         Ok(user_to_proto(row, codes))
     }
 
@@ -297,8 +295,7 @@ impl proto::gen::services::UserServiceHandlers for UserService {
         let username_before = a.username.clone().unwrap().clone();
         if let Some(data) = &req.data {
             Self::apply_user_fields(&mut a, data);
-            a.updated_by = Set(Some(payload.user_id));
-            a.updated_at = Set(Some(crate::data::now()));
+            crate::stamp_update!(a, payload.user_id);
             a.update(&self.state.db).await.map_err(db_err)?;
             if !data.role_ids.is_empty() {
                 self.sync_roles(payload.tenant_id, req.id, &data.role_ids)
@@ -418,5 +415,89 @@ impl proto::gen::services::UserServiceHandlers for UserService {
         a.update(&self.state.db).await.map_err(db_err)?;
         self.state.tokens.revoke_user_token(req.user_id).await;
         Ok(Empty {})
+    }
+}
+
+/// Loads the operator's user row with role codes resolved (the `/me`
+/// shape).
+pub(crate) async fn load_user(
+    state: &AppState,
+    uid: u32,
+) -> Result<(crate::data::sys_users::Model, Vec<String>), crate::state::StatusError> {
+    let user = crate::data::sys_users::Entity::find_by_id(uid)
+        .one(&state.db)
+        .await
+        .map_err(|e| internal_error(format!("db: {e}")))?
+        .ok_or_else(|| status_error("USER_NOT_FOUND", "user not found"))?;
+    let role_ids: Vec<u32> = crate::data::sys_user_roles::Entity::find()
+        .filter(crate::data::sys_user_roles::Column::UserId.eq(uid))
+        .all(&state.db)
+        .await
+        .map_err(|e| internal_error(format!("db: {e}")))?
+        .iter()
+        .filter_map(|r| r.role_id)
+        .collect();
+    let codes = if role_ids.is_empty() {
+        Vec::new()
+    } else {
+        crate::data::sys_roles::Entity::find()
+            .filter(crate::data::sys_roles::Column::Id.is_in(role_ids))
+            .all(&state.db)
+            .await
+            .map_err(|e| internal_error(format!("db: {e}")))?
+            .into_iter()
+            .map(|r| r.code)
+            .collect()
+    };
+    Ok((user, codes))
+}
+
+/// User row → proto User (the identity fields; role codes ride the
+/// `roles` list).
+pub(crate) fn user_to_proto(user: crate::data::sys_users::Model, role_codes: Vec<String>) -> User {
+    User {
+        id: Some(user.id),
+        tenant_id: user.tenant_id,
+        username: Some(user.username),
+        nickname: user.nickname,
+        realname: user.realname,
+        avatar: user.avatar,
+        email: user.email,
+        mobile: user.mobile,
+        telephone: user.telephone,
+        gender: user
+            .gender
+            .as_deref()
+            .map(|g| mapping::user_gender_of(g).unwrap_or(0)),
+        address: user.address,
+        region: user.region,
+        description: user.description,
+        last_login_at: user.last_login_at.and_then(crate::state::naive_to_ts),
+        last_login_ip: user.last_login_ip,
+        status: user
+            .status
+            .as_deref()
+            .map(|s| mapping::user_status_of(s).unwrap_or(0)),
+        locked_until: user.locked_until.and_then(crate::state::naive_to_ts),
+        created_by: user.created_by,
+        updated_by: user.updated_by,
+        deleted_by: user.deleted_by,
+        created_at: user.created_at.and_then(crate::state::naive_to_ts),
+        updated_at: user.updated_at.and_then(crate::state::naive_to_ts),
+        deleted_at: user.deleted_at.and_then(crate::state::naive_to_ts),
+        tenant_name: None,
+        org_unit_id: None,
+        org_unit_ids: Vec::new(),
+        org_unit_name: None,
+        org_unit_names: Vec::new(),
+        position_id: None,
+        position_ids: Vec::new(),
+        position_name: None,
+        position_names: Vec::new(),
+        role_id: None,
+        role_ids: Vec::new(),
+        roles: role_codes,
+        role_names: Vec::new(),
+        remark: user.remark,
     }
 }

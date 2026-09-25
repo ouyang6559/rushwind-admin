@@ -12,9 +12,9 @@
 //! only. That order is the wire contract: codec/binding failures answer
 //! 400 ahead of any 401.
 //!
-//! The authorization engine wires here too lands with the
-//! storage phase; until then the gate is the protected subtree's only
-//! defense.
+//! The authorization engine (crate::authorizer) evaluates the gated
+//! routes inside the gate; the 4-stage check itself lives in the auth
+//! crate.
 //!
 //! The docs switches (Swagger UI / Redoc / the raw spec mount) ride
 //! the pack's settings node; the CORS policy and the request budget

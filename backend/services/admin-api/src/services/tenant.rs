@@ -11,6 +11,7 @@ use sea_orm::{
     TransactionTrait,
 };
 
+use crate::mapping;
 use crate::state::{
     db_err, internal_error, not_found, operator_of, status_error, AppState, StatusError,
 };
@@ -22,42 +23,22 @@ use proto::proto::identity::service::v1::{
 };
 use proto::proto::pagination::PagingRequest;
 
+/// Unknown rows read as ON.
 fn status_to_proto(s: &str) -> i32 {
-    match s {
-        "OFF" => 1,
-        "EXPIRED" => 2,
-        "FREEZE" => 3,
-        _ => 0, // ON
-    }
+    mapping::tenant_status_of(s).unwrap_or(0)
 }
 
 fn status_to_str(v: i32) -> String {
-    match v {
-        1 => "OFF".into(),
-        2 => "EXPIRED".into(),
-        3 => "FREEZE".into(),
-        _ => "ON".into(),
-    }
+    mapping::tenant_status_str(v).unwrap_or("ON").into()
 }
 
+/// Unknown rows read as PAID.
 fn type_to_proto(s: &str) -> i32 {
-    match s {
-        "TRIAL" => 0,
-        "INTERNAL" => 2,
-        "PARTNER" => 3,
-        "CUSTOM" => 4,
-        _ => 1, // PAID
-    }
+    mapping::tenant_type_of(s).unwrap_or(1)
 }
 
 fn type_to_str(v: i32) -> String {
-    match v {
-        0 => "TRIAL".into(),
-        2 => "INTERNAL".into(),
-        3 => "PARTNER".into(),
-        4 => "CUSTOM".into(),
-        _ => "PAID".into(),
-    }
+    mapping::tenant_type_str(v).unwrap_or("PAID").into()
 }
 
 fn tenant_proto(r: crate::data::sys_tenants::Model) -> Tenant {

@@ -1,10 +1,10 @@
 //! OperationAuditLogService — List/Get over `sys_operation_audit_logs`
-//! .
 
 use std::sync::Arc;
 
 use sea_orm::EntityTrait;
 
+use crate::mapping;
 use crate::state::{db_err, not_found, AppState, StatusError};
 use proto::proto::audit::service::v1::{
     GetOperationAuditLogRequest, ListOperationAuditLogResponse, OperationAuditLog,
@@ -20,25 +20,16 @@ fn log_proto(r: crate::data::sys_operation_audit_logs::Model) -> OperationAuditL
         username: r.username,
         resource_type: r.resource_type,
         resource_id: r.resource_id,
-        action: r.action.as_deref().map(|s| match s {
-            "CREATE" => 0,
-            "UPDATE" => 1,
-            "DELETE" => 2,
-            "READ" => 3,
-            "ASSIGN" => 4,
-            "UNASSIGN" => 5,
-            "EXPORT" => 6,
-            "IMPORT" => 7,
-            _ => 8, // OTHER
-        }),
+        action: r
+            .action
+            .as_deref()
+            .map(|s| mapping::operation_audit_action_of(s).unwrap_or(8)),
         before_data: r.before_data.as_ref().map(|v| v.to_string()),
         after_data: r.after_data.as_ref().map(|v| v.to_string()),
-        sensitive_level: r.sensitive_level.as_deref().map(|s| match s {
-            "PUBLIC" => 0,
-            "INTERNAL" => 1,
-            "CONFIDENTIAL" => 2,
-            _ => 3,
-        }),
+        sensitive_level: r
+            .sensitive_level
+            .as_deref()
+            .map(|s| mapping::operation_audit_sensitive_level_of(s).unwrap_or(3)),
         request_id: r.request_id,
         trace_id: r.trace_id,
         success: r.success,

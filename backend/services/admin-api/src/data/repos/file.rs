@@ -6,7 +6,7 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 
 use crate::data::files as entity;
 use crate::data::Viewer;
-use crate::state::{db_err, StatusError};
+use crate::state::{db_err, not_found, StatusError};
 
 repo_shell!(tenant FileRepo, entity);
 
@@ -20,7 +20,7 @@ impl<'a> FileRepo<'a> {
             .one(self.db)
             .await
             .map_err(db_err)?
-            .ok_or_else(|| StatusError::new(404, "NOT_FOUND", "file not found"))
+            .ok_or_else(|| not_found("file"))
     }
 
     pub async fn delete_by_id(&self, id: u32) -> Result<(), StatusError> {

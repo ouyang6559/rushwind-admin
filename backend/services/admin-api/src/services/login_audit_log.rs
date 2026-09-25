@@ -1,10 +1,10 @@
 //! LoginAuditLogService — List/Get over `sys_login_audit_logs`
-//! .
 
 use std::sync::Arc;
 
 use sea_orm::EntityTrait;
 
+use crate::mapping;
 use crate::state::{db_err, not_found, AppState, StatusError};
 use proto::proto::audit::service::v1::{
     GetLoginAuditLogRequest, ListLoginAuditLogResponse, LoginAuditLog,
@@ -24,35 +24,25 @@ fn log_proto(r: crate::data::sys_login_audit_logs::Model) -> LoginAuditLog {
         device_info: None,
         request_id: r.request_id,
         trace_id: r.trace_id,
-        action_type: r.action_type.as_deref().map(|s| match s {
-            "LOGOUT" => 1,
-            "SESSION_EXPIRED" => 2,
-            "KICKED_OUT" => 3,
-            "PASSWORD_RESET" => 4,
-            _ => 0,
-        }),
-        status: r.status.as_deref().map(|s| match s {
-            "FAILED" => 1,
-            "PARTIAL" => 2,
-            "LOCKED" => 3,
-            _ => 0,
-        }),
+        action_type: r
+            .action_type
+            .as_deref()
+            .map(|s| mapping::login_audit_action_of(s).unwrap_or(0)),
+        status: r
+            .status
+            .as_deref()
+            .map(|s| mapping::login_audit_status_of(s).unwrap_or(0)),
         failure_reason: r.failure_reason,
         mfa_status: r.mfa_status,
-        login_method: r.login_method.as_deref().map(|s| match s {
-            "SMS_CODE" => 1,
-            "QR_CODE" => 2,
-            "OIDC_SOCIAL" => 3,
-            "BIOMETRIC" => 4,
-            "FIDO2" => 5,
-            _ => 0,
-        }),
+        login_method: r
+            .login_method
+            .as_deref()
+            .map(|s| mapping::login_audit_method_of(s).unwrap_or(0)),
         risk_score: r.risk_score,
-        risk_level: r.risk_level.as_deref().map(|s| match s {
-            "MEDIUM" => 1,
-            "HIGH" => 2,
-            _ => 0,
-        }),
+        risk_level: r
+            .risk_level
+            .as_deref()
+            .map(|s| mapping::login_audit_risk_level_of(s).unwrap_or(0)),
         risk_factors: r
             .risk_factors
             .as_ref()

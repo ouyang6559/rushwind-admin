@@ -1,12 +1,13 @@
-//! NotificationChannelService — //! service: SMTP/webhook channel CRUD plus
+//! NotificationChannelService — SMTP/webhook channel CRUD plus
 //! SendTestEmail (delivery lands with the mailer phase; the request
 //! validates the channel and answers per contract).
 
 use std::sync::Arc;
 
-use sea_orm::{ActiveModelTrait, EntityTrait, Set};
+use sea_orm::{ActiveModelTrait, Set};
 
-use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
+use crate::mapping;
+use crate::state::{db_err, operator_of, status_error, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::notification_channel::service::v1::{
     CreateNotificationChannelRequest, DeleteNotificationChannelRequest,
@@ -32,11 +33,11 @@ fn channel_proto(r: crate::data::sys_notification_channels::Model) -> Notificati
             .is_some_and(|p| !p.is_empty())
             .then_some(true),
         smtp_from: r.smtp_from,
-        smtp_tls: r.smtp_tls.as_deref().map(|s| match s {
-            "NONE" => 0,
-            "SSL" => 2,
-            _ => 1,
-        }),
+        // Unknown rows read as START_TLS.
+        smtp_tls: r
+            .smtp_tls
+            .as_deref()
+            .map(|s| mapping::notification_smtp_tls_of(s).unwrap_or(1)),
         enabled: r.status.as_deref().map(|s| s != "OFF"),
         remark: r.remark,
         created_by: r.created_by,
@@ -49,13 +50,11 @@ fn channel_proto(r: crate::data::sys_notification_channels::Model) -> Notificati
             .as_deref()
             .is_some_and(|s| !s.is_empty())
             .then_some(true),
-        webhook_sign_style: r.webhook_sign_style.as_deref().map(|s| match s {
-            "NONE" => 1,
-            "DINGTALK" => 2,
-            "FEISHU" => 3,
-            "WECOM" => 4,
-            _ => 0, // CUSTOM
-        }),
+        // Unknown rows read as CUSTOM.
+        webhook_sign_style: r
+            .webhook_sign_style
+            .as_deref()
+            .map(|s| mapping::notification_sign_style_of(s).unwrap_or(0)),
         webhook_payload_template: r.webhook_payload_template,
     }
 }
@@ -84,12 +83,8 @@ impl proto::gen::services::NotificationChannelServiceHandlers for NotificationCh
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetNotificationChannelRequest,
     ) -> Result<NotificationChannel, StatusError> {
-        let row = crate::data::sys_notification_channels::Entity::find_by_id(req.id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
-            .ok_or_else(|| not_found("notification channel"))?;
-        Ok(channel_proto(row))
+        let repo = crate::data::repos::NotificationChannelRepo::new(&self.state.db);
+        Ok(channel_proto(repo.get_by_id(req.id).await?))
     }
 
     async fn create_notification_channel(
@@ -111,19 +106,19 @@ impl proto::gen::services::NotificationChannelServiceHandlers for NotificationCh
             smtp_username: Set(data.smtp_username),
             smtp_password: Set(None), // secrets write via update with a password payload
             smtp_from: Set(data.smtp_from),
-            smtp_tls: Set(Some(match data.smtp_tls.unwrap_or(1) {
-                0 => "NONE".to_string(),
-                2 => "SSL".to_string(),
-                _ => "START_TLS".to_string(),
-            })),
+            smtp_tls: Set(Some(
+                data.smtp_tls
+                    .map_or("START_TLS", |v| {
+                        mapping::notification_smtp_tls_str(v).unwrap_or("START_TLS")
+                    })
+                    .to_string(),
+            )),
             webhook_url: Set(data.webhook_url),
             webhook_secret: Set(None), // secrets write via update with a secret payload
-            webhook_sign_style: Set(data.webhook_sign_style.map(|v| match v {
-                1 => "NONE".to_string(),
-                2 => "DINGTALK".to_string(),
-                3 => "FEISHU".to_string(),
-                4 => "WECOM".to_string(),
-                _ => "CUSTOM".to_string(),
+            webhook_sign_style: Set(data.webhook_sign_style.map(|v| {
+                mapping::notification_sign_style_str(v)
+                    .unwrap_or("CUSTOM")
+                    .to_string()
             })),
             webhook_payload_template: Set(data.webhook_payload_template),
             status: Set(Some("ON".into())),
@@ -144,11 +139,8 @@ impl proto::gen::services::NotificationChannelServiceHandlers for NotificationCh
         req: UpdateNotificationChannelRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let row = crate::data::sys_notification_channels::Entity::find_by_id(req.id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
-            .ok_or_else(|| not_found("notification channel"))?;
+        let repo = crate::data::repos::NotificationChannelRepo::new(&self.state.db);
+        let row = repo.get_by_id(req.id).await?;
         let mut a: crate::data::sys_notification_channels::ActiveModel = row.into();
         if let Some(data) = &req.data {
             if let Some(v) = &data.name {
@@ -173,27 +165,24 @@ impl proto::gen::services::NotificationChannelServiceHandlers for NotificationCh
                 a.webhook_payload_template = Set(Some(v.clone()));
             }
             if let Some(v) = data.webhook_sign_style {
-                a.webhook_sign_style = Set(Some(match v {
-                    1 => "NONE".to_string(),
-                    2 => "DINGTALK".to_string(),
-                    3 => "FEISHU".to_string(),
-                    4 => "WECOM".to_string(),
-                    _ => "CUSTOM".to_string(),
-                }));
+                a.webhook_sign_style = Set(Some(
+                    mapping::notification_sign_style_str(v)
+                        .unwrap_or("CUSTOM")
+                        .to_string(),
+                ));
             }
             if let Some(v) = data.smtp_tls {
-                a.smtp_tls = Set(Some(match v {
-                    0 => "NONE".to_string(),
-                    2 => "SSL".to_string(),
-                    _ => "START_TLS".to_string(),
-                }));
+                a.smtp_tls = Set(Some(
+                    mapping::notification_smtp_tls_str(v)
+                        .unwrap_or("START_TLS")
+                        .to_string(),
+                ));
             }
             if let Some(v) = data.enabled {
                 a.status = Set(Some(if v { "ON".into() } else { "OFF".into() }));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }
@@ -203,10 +192,9 @@ impl proto::gen::services::NotificationChannelServiceHandlers for NotificationCh
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: DeleteNotificationChannelRequest,
     ) -> Result<Empty, StatusError> {
-        crate::data::sys_notification_channels::Entity::delete_by_id(req.id)
-            .exec(&self.state.db)
-            .await
-            .map_err(db_err)?;
+        let repo = crate::data::repos::NotificationChannelRepo::new(&self.state.db);
+        repo.get_by_id(req.id).await?;
+        repo.delete_by_id(req.id).await?;
         Ok(Empty {})
     }
 
@@ -216,11 +204,8 @@ impl proto::gen::services::NotificationChannelServiceHandlers for NotificationCh
         req: SendTestEmailRequest,
     ) -> Result<Empty, StatusError> {
         // Delivery rides the mailer phase; validate the channel exists.
-        let row = crate::data::sys_notification_channels::Entity::find_by_id(req.id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
-            .ok_or_else(|| not_found("notification channel"))?;
+        let repo = crate::data::repos::NotificationChannelRepo::new(&self.state.db);
+        let row = repo.get_by_id(req.id).await?;
         if row.smtp_host.as_deref().map_or(true, |h| h.is_empty()) {
             return Err(status_error(
                 "BAD_REQUEST",

@@ -10,8 +10,9 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
 use crate::data::repos::RoleRepo;
 use crate::data::Viewer;
+use crate::mapping;
 use crate::state::{
-    db_err, internal_error, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
+    db_err, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
 use pbjson_types::Empty;
 use proto::proto::pagination::PagingRequest;
@@ -30,22 +31,14 @@ fn scope_to_str(v: i32) -> String {
     }
 }
 
+/// Unknown rows read as the zero variant.
 fn scope_to_proto(s: &str) -> i32 {
-    match s {
-        "SELF" => 1,
-        "UNIT_ONLY" => 2,
-        "UNIT_AND_CHILD" => 3,
-        "SELECTED_UNITS" => 4,
-        _ => 0,
-    }
+    mapping::role_scope_of(s).unwrap_or(0)
 }
 
+/// Unknown rows read as 3 (CUSTOM).
 fn type_to_proto(s: &str) -> i32 {
-    match s {
-        "SYSTEM" => 1,
-        "TEMPLATE" => 2,
-        _ => 3,
-    }
+    mapping::role_type_of(s).unwrap_or(3)
 }
 
 async fn role_proto(state: &AppState, r: crate::data::sys_roles::Model) -> Role {
@@ -322,8 +315,7 @@ impl proto::gen::services::RoleServiceHandlers for RoleService {
         let mut a: crate::data::sys_roles::ActiveModel = row.into();
         if let Some(data) = &req.data {
             Self::apply_fields(&mut a, data);
-            a.updated_by = Set(Some(payload.user_id));
-            a.updated_at = Set(Some(crate::data::now()));
+            crate::stamp_update!(a, payload.user_id);
             a.update(&self.state.db).await.map_err(db_err)?;
             self.sync_bindings(payload.tenant_id, req.id, data).await?;
         }
@@ -372,86 +364,5 @@ impl proto::gen::services::RoleServiceHandlers for RoleService {
             .await
             .map_err(db_err)?;
         Ok(Empty {})
-    }
-}
-
-impl RoleService {
-    /// CreateTenantRoleFromTemplate — copies the `template:tenant:manager`
-    /// role into a fresh tenant with its permission bindings.
-    /// Wired with tenant onboarding (storage phase).
-    #[allow(dead_code)]
-    pub async fn create_tenant_role_from_template(
-        &self,
-        tenant_id: u32,
-        operator_id: u32,
-    ) -> Result<u32, StatusError> {
-        let template = crate::data::sys_roles::Entity::find()
-            .filter(crate::data::sys_roles::Column::Code.eq("template:tenant:manager"))
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
-            .ok_or_else(|| internal_error("tenant-manager role template missing"))?;
-        let template_proto = role_proto(&self.state, template.clone()).await;
-        let role = crate::data::sys_roles::ActiveModel {
-            tenant_id: Set(Some(tenant_id)),
-            name: Set(template.name.clone()),
-            code: Set("tenant:manager".into()),
-            is_protected: Set(Some(true)),
-            type_column: Set(Some("TENANT".into())),
-            data_scope: Set(template.data_scope.clone()),
-            status: Set(Some("ON".into())),
-            sort_order: Set(template.sort_order),
-            created_by: Set(Some(operator_id)),
-            created_at: Set(Some(crate::data::now())),
-            updated_at: Set(Some(crate::data::now())),
-            ..Default::default()
-        }
-        .insert(&self.state.db)
-        .await
-        .map_err(db_err)?;
-        self.sync_bindings(tenant_id, role.id, &template_proto)
-            .await?;
-        Ok(role.id)
-    }
-
-    #[allow(dead_code)]
-    pub async fn bind_tenant_admin(
-        &self,
-        tenant_id: u32,
-        user_id: u32,
-        role_id: u32,
-        operator_id: u32,
-    ) -> Result<(), StatusError> {
-        crate::data::sys_user_roles::ActiveModel {
-            tenant_id: Set(Some(tenant_id)),
-            user_id: Set(Some(user_id)),
-            role_id: Set(Some(role_id)),
-            is_primary: Set(Some(true)),
-            status: Set(Some("ACTIVE".into())),
-            assigned_by: Set(Some(operator_id)),
-            assigned_at: Set(Some(crate::data::now())),
-            created_at: Set(Some(crate::data::now())),
-            updated_at: Set(Some(crate::data::now())),
-            ..Default::default()
-        }
-        .insert(&self.state.db)
-        .await
-        .map_err(db_err)?;
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub async fn list_role_codes(&self, role_ids: &[u32]) -> Vec<String> {
-        if role_ids.is_empty() {
-            return Vec::new();
-        }
-        crate::data::sys_roles::Entity::find()
-            .filter(crate::data::sys_roles::Column::Id.is_in(role_ids.to_vec()))
-            .all(&self.state.db)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .map(|r| r.code)
-            .collect()
     }
 }

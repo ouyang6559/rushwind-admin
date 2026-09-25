@@ -1,3 +1,6 @@
+//! DictEntryRepo — tenant-scoped dictionary entries: paged listing,
+//! the ListByTypeCode walk, and the i18n-aware delete.
+
 //! DictTypeRepo / DictEntryRepo — tenant-scoped dictionary trees with cascade
 //! deletes and the ListByTypeCode walk (enabled entries by sort_order).
 
@@ -7,77 +10,6 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOr
 use crate::data::Viewer;
 use crate::data::{sys_dict_entries, sys_dict_types};
 use crate::state::{db_err, StatusError};
-
-pub struct DictTypeRepo<'a> {
-    pub db: &'a DatabaseConnection,
-    pub viewer: Viewer,
-}
-
-impl<'a> DictTypeRepo<'a> {
-    pub fn new(db: &'a DatabaseConnection, viewer: Viewer) -> Self {
-        Self { db, viewer }
-    }
-
-    fn condition(&self) -> Condition {
-        match self.viewer.tenant_scope() {
-            Some(tid) => Condition::all().add(sys_dict_types::Column::TenantId.eq(tid)),
-            None => Condition::all(),
-        }
-    }
-
-    pub async fn list(&self) -> Result<Vec<sys_dict_types::Model>, StatusError> {
-        sys_dict_types::Entity::find()
-            .filter(self.condition())
-            .order_by_asc(sys_dict_types::Column::SortOrder)
-            .all(self.db)
-            .await
-            .map_err(db_err)
-    }
-
-    /// Paged listing over the PagingRequest contract: returns (rows, total).
-    pub async fn paged_list(
-        &self,
-        req: &proto::proto::pagination::PagingRequest,
-    ) -> Result<(Vec<sys_dict_types::Model>, u64), StatusError> {
-        crate::paging::fetch_paged(
-            self.db,
-            sys_dict_types::Entity::find()
-                .filter(self.condition())
-                .order_by_asc(sys_dict_types::Column::SortOrder),
-            req,
-        )
-        .await
-    }
-
-    pub async fn get_by_code(
-        &self,
-        code: &str,
-    ) -> Result<Option<sys_dict_types::Model>, StatusError> {
-        sys_dict_types::Entity::find()
-            .filter(
-                self.condition()
-                    .add(sys_dict_types::Column::TypeCode.eq(code)),
-            )
-            .one(self.db)
-            .await
-            .map_err(db_err)
-    }
-
-    /// Delete cascades the type's entries (Delete = BatchDelete semantics).
-    pub async fn delete_cascade(&self, ids: &[u32]) -> Result<(), StatusError> {
-        sys_dict_entries::Entity::delete_many()
-            .filter(sys_dict_entries::Column::TypeId.is_in(ids.to_vec()))
-            .exec(self.db)
-            .await
-            .map_err(db_err)?;
-        sys_dict_types::Entity::delete_many()
-            .filter(sys_dict_types::Column::Id.is_in(ids.to_vec()))
-            .exec(self.db)
-            .await
-            .map_err(db_err)?;
-        Ok(())
-    }
-}
 
 pub struct DictEntryRepo<'a> {
     pub db: &'a DatabaseConnection,

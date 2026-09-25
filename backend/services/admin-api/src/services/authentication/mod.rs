@@ -4,6 +4,19 @@
 //! timing equalizer) → user/policy re-checks → authority resolution
 //! (`system:access_backend`) → MFA gate → token pair + Redis whitelist
 //! rows → refresh cookies.
+//!
+//! The module map: [`authority`] aggregates roles/scopes/hidden-field
+//! claims, [`credential`] resolves identifiers and verifies passwords,
+//! [`policy`] evaluates the login-policy gate, [`token_issue`] mints
+//! the token pair with session/cookie bookkeeping, and [`mfa`] owns
+//! the login-challenge store. `mod.rs` keeps the RPC surface and the
+//! `do_password` orchestrator that walks those gates in order.
+
+mod authority;
+mod credential;
+mod mfa;
+mod policy;
+mod token_issue;
 
 use std::sync::Arc;
 
@@ -20,453 +33,19 @@ use proto::proto::authentication::service::v1::{
 use rushwind_http_binding::envelope::StatusError;
 
 use crate::state::{internal_error, status_error, AppState};
-use crate::token::{new_jwt_id, SessionMeta, UserTokenPayload, CLIENT_TYPE_ADMIN};
-use rushwind_authn::Authenticator as _;
+use crate::token::{new_jwt_id, SessionMeta, UserTokenPayload};
 
-use crate::data::sys_configs as configs;
-use crate::data::sys_login_policies as login_policies;
-use crate::data::sys_role_permissions as role_permissions;
-use crate::data::sys_roles as roles;
 use crate::data::sys_tenants as tenants;
 use crate::data::sys_user_credentials as credentials;
 use crate::data::sys_user_mfa_factors as mfa_factors;
-use crate::data::sys_user_roles as user_roles;
 use crate::data::sys_users as users;
 
 pub struct AuthenticationService {
     pub state: Arc<AppState>,
 }
 
-/// The permission code every backend-capable user must hold
-/// (`constants.SystemAccessBackendPermissionCode`).
-const SYSTEM_ACCESS_BACKEND: &str = "sys:access_backend";
-const PLATFORM_ADMIN_ROLE: &str = "platform:admin";
-const TENANT_ADMIN_ROLE: &str = "tenant:manager";
-
-/// The MFA login-challenge window.
-const MFA_CHALLENGE_TTL: u64 = 300;
-
 fn invalid_password() -> StatusError {
     status_error("INVALID_PASSWORD", "invalid username or password")
-}
-
-impl AuthenticationService {
-    async fn config_int(&self, key: &str, default: i64) -> i64 {
-        let row = configs::Entity::find()
-            .filter(configs::Column::Key.eq(key))
-            .one(&self.state.db)
-            .await
-            .ok()
-            .flatten();
-        match row.and_then(|r| r.value) {
-            Some(v) => v.parse().unwrap_or(default),
-            None => default,
-        }
-    }
-
-    /// resolveUserAuthority + authorizeAndEnrich (OneToOne relation): the
-    /// user's roles → permission codes must contain
-    /// `system:access_backend`; roles/admin-flags/data-scope/hidden-field
-    /// claims aggregate from the valid roles.
-    async fn resolve_authority(&self, payload: &mut UserTokenPayload) -> Result<(), StatusError> {
-        let uid = payload.user_id;
-        let _tid = payload.tenant_id;
-
-        let role_rows = user_roles::Entity::find()
-            .filter(
-                Condition::all()
-                    .add(user_roles::Column::UserId.eq(uid))
-                    .add(user_roles::Column::Status.eq("ACTIVE")),
-            )
-            .all(&self.state.db)
-            .await
-            .map_err(|e| internal_error(format!("db: {e}")))?;
-        let role_ids: Vec<u32> = role_rows.iter().filter_map(|r| r.role_id).collect();
-
-        let perm_rows = if role_ids.is_empty() {
-            Vec::new()
-        } else {
-            role_permissions::Entity::find()
-                .filter(role_permissions::Column::RoleId.is_in(role_ids.clone()))
-                .all(&self.state.db)
-                .await
-                .map_err(|e| internal_error(format!("db: {e}")))?
-        };
-        let perm_ids: Vec<u32> = perm_rows.iter().filter_map(|r| r.permission_id).collect();
-
-        let codes: Vec<String> = if perm_ids.is_empty() {
-            Vec::new()
-        } else {
-            crate::data::sys_permissions::Entity::find()
-                .filter(crate::data::sys_permissions::Column::Id.is_in(perm_ids))
-                .all(&self.state.db)
-                .await
-                .map_err(|e| internal_error(format!("db: {e}")))?
-                .into_iter()
-                .map(|p| p.code)
-                .collect()
-        };
-
-        if !codes.iter().any(|c| c == SYSTEM_ACCESS_BACKEND) {
-            return Err(status_error("FORBIDDEN", "insufficient authority"));
-        }
-
-        let role_rows = roles::Entity::find()
-            .filter(roles::Column::Id.is_in(role_ids))
-            .all(&self.state.db)
-            .await
-            .map_err(|e| internal_error(format!("db: {e}")))?;
-
-        payload.roles = role_rows.iter().map(|r| r.code.clone()).collect();
-        for code in &payload.roles {
-            if code == PLATFORM_ADMIN_ROLE {
-                payload.is_platform_admin = Some(true);
-            }
-            if code == TENANT_ADMIN_ROLE {
-                payload.is_tenant_admin = Some(true);
-            }
-        }
-
-        // dss: the roles' data-scope enum names (unique, order stable).
-        let mut dss = Vec::new();
-        let mut dsu_units: Vec<u32> = Vec::new();
-        for role in &role_rows {
-            if let Some(scope) = &role.data_scope {
-                if !dss.iter().any(|s| s == scope) {
-                    dss.push(scope.clone());
-                }
-            }
-        }
-        payload.data_scopes = dss;
-        // dsu: the unit targets of UNIT_* scopes (union).
-        let unit_roles: Vec<u32> = role_rows
-            .iter()
-            .filter(|r| {
-                matches!(
-                    r.data_scope.as_deref(),
-                    Some("UNIT_ONLY") | Some("UNIT_AND_CHILD") | Some("SELECTED_UNITS")
-                )
-            })
-            .map(|r| r.id)
-            .collect();
-        if !unit_roles.is_empty() {
-            let units = crate::data::sys_role_org_units::Entity::find()
-                .filter(crate::data::sys_role_org_units::Column::RoleId.is_in(unit_roles))
-                .all(&self.state.db)
-                .await
-                .map_err(|e| internal_error(format!("db: {e}")))?;
-            for u in units {
-                if let Some(oid) = u.org_unit_id {
-                    if !dsu_units.contains(&oid) {
-                        dsu_units.push(oid);
-                    }
-                }
-            }
-            payload.data_scope_unit_ids = Some(
-                dsu_units
-                    .iter()
-                    .map(|u| u.to_string())
-                    .collect::<Vec<_>>()
-                    .join(","),
-            );
-        }
-
-        // hfs: "resource.field" hidden-field entries of the valid roles.
-        let hfs = crate::data::sys_role_field_permissions::Entity::find()
-            .filter(
-                crate::data::sys_role_field_permissions::Column::RoleId
-                    .is_in(role_rows.iter().map(|r| r.id).collect::<Vec<_>>()),
-            )
-            .all(&self.state.db)
-            .await
-            .map_err(|e| internal_error(format!("db: {e}")))?;
-        payload.hidden_fields = hfs
-            .iter()
-            .filter_map(|r| {
-                let resource = r.resource.as_ref()?;
-                let field = r.field_name.as_ref()?;
-                Some(format!("{resource}.{field}"))
-            })
-            .collect();
-
-        Ok(())
-    }
-
-    /// FindUsernameByIdentifier: `@` → email lookup, all-digits → mobile
-    /// lookup (ambiguous → 500), miss → input unchanged.
-    async fn resolve_identifier(&self, tenant_id: u32, input: &str) -> Result<String, StatusError> {
-        if input.is_empty() {
-            return Ok(input.to_string());
-        }
-        let column = if input.contains('@') {
-            users::Column::Email
-        } else if input.bytes().all(|b| b.is_ascii_digit()) {
-            let rows = users::Entity::find()
-                .filter(
-                    Condition::all()
-                        .add(users::Column::TenantId.eq(tenant_id))
-                        .add(users::Column::Mobile.eq(input)),
-                )
-                .all(&self.state.db)
-                .await
-                .map_err(|e| internal_error(format!("db: {e}")))?;
-            if rows.len() > 1 {
-                return Err(internal_error("ambiguous account identifier"));
-            }
-            return Ok(rows
-                .first()
-                .map(|u| u.username.clone())
-                .unwrap_or_else(|| input.to_string()));
-        } else {
-            return Ok(input.to_string());
-        };
-        let row = users::Entity::find()
-            .filter(
-                Condition::all()
-                    .add(users::Column::TenantId.eq(tenant_id))
-                    .add(column.eq(input)),
-            )
-            .one(&self.state.db)
-            .await
-            .map_err(|e| internal_error(format!("db: {e}")))?;
-        Ok(row.map(|u| u.username).unwrap_or_else(|| input.to_string()))
-    }
-
-    /// FindUserCredential: decrypt → lookup → dummy-verify paths →
-    /// bcrypt → password-age policy. Returns the matched user id.
-    async fn verify_credential(
-        &self,
-        tenant_id: u32,
-        identifier: &str,
-        encrypted_password: &str,
-    ) -> Result<u32, StatusError> {
-        use base64::Engine as _;
-        let plain =
-            match base64::engine::general_purpose::STANDARD.decode(encrypted_password.trim()) {
-                Ok(bytes) => match crate::crypto::decrypt_aes_cbc(&bytes) {
-                    Some(text) => text,
-                    None => {
-                        return Err(status_error("BAD_REQUEST", "decrypt credential failed"));
-                    }
-                },
-                Err(_) => {
-                    return Err(status_error("BAD_REQUEST", "invalid credential format"));
-                }
-            };
-
-        let row = credentials::Entity::find()
-            .filter(
-                Condition::all()
-                    .add(credentials::Column::TenantId.eq(tenant_id))
-                    .add(credentials::Column::IdentityType.eq("USERNAME"))
-                    .add(credentials::Column::Identifier.eq(identifier)),
-            )
-            .one(&self.state.db)
-            .await;
-        let row = match row {
-            Ok(Some(row)) => row,
-            Ok(None) => {
-                crate::crypto::dummy_verify();
-                return Err(status_error("USER_NOT_FOUND", "user not found"));
-            }
-            Err(_) => {
-                crate::crypto::dummy_verify();
-                return Err(internal_error("db error"));
-            }
-        };
-        let (cred, cred_user_id) = (row.credential.clone(), row.user_id);
-        let (Some(cred_user_id), Some(status)) = (cred_user_id, row.status.clone()) else {
-            crate::crypto::dummy_verify();
-            return Err(status_error("USER_NOT_FOUND", "user not found"));
-        };
-        if status != "ENABLED" {
-            crate::crypto::dummy_verify();
-            return Err(status_error("USER_NOT_FOUND", "user not found"));
-        }
-        if !crate::crypto::verify_password(&plain, &cred) {
-            return Err(status_error("INVALID_PASSWORD", "incorrect password"));
-        }
-        // Password-age policy (sys.password.maxAgeDays, ≤0 disables).
-        let max_age = self.config_int("sys.password.maxAgeDays", 90).await;
-        if max_age > 0 && row.credential_type.as_deref() == Some("PASSWORD_HASH") {
-            if let Some(updated_at) = row.updated_at {
-                let age = chrono::Local::now().naive_local() - updated_at;
-                if age > chrono::Duration::days(max_age) {
-                    return Err(status_error(
-                        "BAD_REQUEST",
-                        "password expired, please reset your password",
-                    ));
-                }
-            }
-        }
-        Ok(cred_user_id)
-    }
-
-    /// checkLoginPolicies — black-hit blocks, whitelist presence requires
-    /// a hit, per IP/TIME/DEVICE in the checker's order. Fail-open.
-    async fn check_login_policies(
-        &self,
-        tenant_id: u32,
-        user_id: u32,
-        ip: &str,
-        device_id: &str,
-    ) -> bool {
-        let rows = match login_policies::Entity::find()
-            .filter(login_policies::Column::TenantId.eq(tenant_id))
-            .all(&self.state.db)
-            .await
-        {
-            Ok(rows) => rows,
-            Err(_) => return false,
-        };
-        for method in ["IP", "TIME", "DEVICE"] {
-            let mut blacks = Vec::new();
-            let mut whites = Vec::new();
-            for p in &rows {
-                if p.method.as_deref() != Some(method) {
-                    continue;
-                }
-                let target = p.target_id.as_deref().and_then(|t| t.parse::<u32>().ok());
-                if let Some(target) = target {
-                    if target != 0 && target != user_id {
-                        continue;
-                    }
-                }
-                if p.type_column.as_deref() == Some("WHITELIST") {
-                    whites.push(p);
-                } else {
-                    blacks.push(p);
-                }
-            }
-            let matched = |value: &str| -> bool {
-                match method {
-                    "IP" => crate::policy::ip_matches(ip, value),
-                    "TIME" => crate::policy::time_window_matches(value),
-                    _ => !device_id.is_empty() && device_id == value,
-                }
-            };
-            for p in &blacks {
-                if p.value.as_deref().map(&matched).unwrap_or(false) {
-                    return true;
-                }
-            }
-            if !whites.is_empty()
-                && !whites
-                    .iter()
-                    .any(|p| p.value.as_deref().map(&matched).unwrap_or(false))
-            {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Mint the access+refresh pair and register the Redis rows.
-    async fn issue_token_pair(
-        &self,
-        payload: &UserTokenPayload,
-    ) -> Result<(String, String), StatusError> {
-        let now = chrono::Utc::now().timestamp();
-        let access_exp = now + self.state.tokens.access_expires_secs;
-        let refresh_exp = now + self.state.tokens.refresh_expires_secs;
-
-        let access = self
-            .state
-            .jwt
-            .create_identity(&rushwind_authn::AuthClaims(
-                payload.to_access_claims(access_exp),
-            ))
-            .map_err(|_| internal_error("create access token failed"))?;
-        let refresh = self
-            .state
-            .jwt
-            .create_identity(&rushwind_authn::AuthClaims(
-                payload.to_refresh_claims(refresh_exp),
-            ))
-            .map_err(|_| internal_error("create refresh token failed"))?;
-        self.state
-            .tokens
-            .add_token_pair(payload.user_id, &payload.jti, &access, &refresh)
-            .await
-            .map_err(internal_error)?;
-        Ok((access, refresh))
-    }
-
-    fn session_meta(&self, payload: &UserTokenPayload) -> SessionMeta {
-        SessionMeta {
-            username: payload.username.clone(),
-            tenant_id: payload.tenant_id,
-            ip: String::new(),
-            user_agent: String::new(),
-            device: payload.device_id.clone(),
-            login_at: chrono::Local::now().naive_local().to_string(),
-        }
-    }
-
-    async fn set_cookies(&self, ctx: &Ctx, refresh_token: &str, secure: bool) {
-        let (rt, exp) = self
-            .state
-            .tokens
-            .refresh_cookie_values(refresh_token, secure);
-        ctx.add_reply_header("Set-Cookie", rt);
-        ctx.add_reply_header("Set-Cookie", exp);
-    }
-
-    fn clear_cookies(&self, ctx: &Ctx, secure: bool) {
-        let (rt, exp) = crate::token::TokenStore::clear_cookie_values(secure);
-        ctx.add_reply_header("Set-Cookie", rt);
-        ctx.add_reply_header("Set-Cookie", exp);
-    }
-
-    /// The MFA login challenge row (`mfa:login:{opId}`, 5 min).
-    async fn set_mfa_challenge(
-        &self,
-        op_id: &str,
-        payload: &UserTokenPayload,
-    ) -> Result<(), String> {
-        let mut conn = self.state.redis.clone();
-        let body = serde_json::json!({ "payload": payload, "clientType": CLIENT_TYPE_ADMIN });
-        let _: Result<(), _> = redis::AsyncCommands::set_ex(
-            &mut conn,
-            format!("mfa:login:{op_id}"),
-            body.to_string(),
-            MFA_CHALLENGE_TTL,
-        )
-        .await;
-        Ok(())
-    }
-
-    /// Wired with the MFA login branch (storage phase).
-    #[allow(dead_code)]
-    async fn take_mfa_challenge(&self, op_id: &str) -> Option<UserTokenPayload> {
-        let mut conn = self.state.redis.clone();
-        let raw: Option<String> =
-            redis::AsyncCommands::get(&mut conn, format!("mfa:login:{op_id}"))
-                .await
-                .ok()?;
-        let value: serde_json::Value = serde_json::from_str(raw.as_deref()?).ok()?;
-        serde_json::from_value(value.get("payload").cloned()?).ok()
-    }
-
-    /// Builds the token payload for an authenticated user (fresh roles,
-    /// scopes and hidden fields) — shared by login and refresh.
-    async fn payload_for_user(
-        &self,
-        user: users::Model,
-        client_id: Option<String>,
-        device_id: Option<String>,
-    ) -> Result<UserTokenPayload, StatusError> {
-        let mut payload = UserTokenPayload {
-            user_id: user.id,
-            tenant_id: user.tenant_id.unwrap_or(0),
-            username: user.username.clone(),
-            client_id,
-            device_id,
-            ..Default::default()
-        };
-        self.resolve_authority(&mut payload).await?;
-        Ok(payload)
-    }
 }
 
 type Ctx = rushwind_http_binding::ctx::RequestContext;
@@ -773,6 +352,10 @@ impl AuthenticationServiceHandlers for AuthenticationService {
 }
 
 impl AuthenticationService {
+    /// The password grant: walk the gates in order, then mint the
+    /// token pair. Each gate lives beside its helpers — policy in
+    /// [`policy`], credentials in [`credential`], authority in
+    /// [`authority`], the MFA branch in [`mfa`].
     async fn do_password(&self, ctx: Ctx, req: LoginRequest) -> Result<LoginResponse, StatusError> {
         let client_ip = ctx.ip.clone();
         // The reads GetUsername() — only the Username oneof

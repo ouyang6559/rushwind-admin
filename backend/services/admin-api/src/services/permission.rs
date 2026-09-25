@@ -166,22 +166,41 @@ impl PermissionService {
     /// SyncPermissions: truncate biz permissions + groups, rebuild from
     /// ON menus (codes per menu type; CATALOG → group) and from enabled
     /// apis (code by path, grouped under UncategorizedPermissionGroup
-    /// when unmatched), then link menu/api ids.
     async fn sync_from_sources(&self, operator_id: u32) -> Result<(), StatusError> {
+        use sea_orm::TransactionTrait as _;
+        let txn = self.state.db.begin().await.map_err(db_err)?;
+        let result = self.sync_from_sources_in_txn(&txn, operator_id).await;
+        match result {
+            Ok(()) => {
+                txn.commit().await.map_err(db_err)?;
+            }
+            Err(_) => {
+                let _ = txn.rollback().await;
+            }
+        }
+        result
+    }
+
+    /// when unmatched), then link menu/api ids.
+    async fn sync_from_sources_in_txn(
+        &self,
+        txn: &sea_orm::DatabaseTransaction,
+        operator_id: u32,
+    ) -> Result<(), StatusError> {
         crate::data::sys_permissions::Entity::delete_many()
-            .exec(&self.state.db)
+            .exec(txn)
             .await
             .map_err(db_err)?;
         crate::data::sys_permission_groups::Entity::delete_many()
-            .exec(&self.state.db)
+            .exec(txn)
             .await
             .map_err(db_err)?;
         crate::data::sys_permission_menus::Entity::delete_many()
-            .exec(&self.state.db)
+            .exec(txn)
             .await
             .map_err(db_err)?;
         crate::data::sys_permission_apis::Entity::delete_many()
-            .exec(&self.state.db)
+            .exec(txn)
             .await
             .map_err(db_err)?;
 
@@ -189,7 +208,7 @@ impl PermissionService {
         let menus = crate::data::sys_menus::Entity::find()
             .filter(crate::data::sys_menus::Column::Status.eq("ON"))
             .order_by_asc(crate::data::sys_menus::Column::Id)
-            .all(&self.state.db)
+            .all(txn)
             .await
             .map_err(db_err)?;
 
@@ -233,7 +252,7 @@ impl PermissionService {
                     updated_at: Set(Some(crate::data::now())),
                     ..Default::default()
                 }
-                .insert(&self.state.db)
+                .insert(txn)
                 .await
                 .map_err(db_err)?;
                 group_ids.insert(code.clone(), group.id);
@@ -259,7 +278,7 @@ impl PermissionService {
                 updated_at: Set(Some(crate::data::now())),
                 ..Default::default()
             }
-            .insert(&self.state.db)
+            .insert(txn)
             .await
             .map_err(db_err)?;
             next_id += 1;
@@ -271,7 +290,7 @@ impl PermissionService {
                 updated_at: Set(Some(crate::data::now())),
                 ..Default::default()
             }
-            .insert(&self.state.db)
+            .insert(txn)
             .await
             .map_err(db_err)?;
         }
@@ -280,7 +299,7 @@ impl PermissionService {
         // code prefix, else land in the uncategorized group.
         let apis = crate::data::sys_apis::Entity::find()
             .filter(crate::data::sys_apis::Column::Status.eq("ON"))
-            .all(&self.state.db)
+            .all(txn)
             .await
             .map_err(db_err)?;
         for api in apis {
@@ -310,7 +329,7 @@ impl PermissionService {
                 updated_at: Set(Some(crate::data::now())),
                 ..Default::default()
             }
-            .insert(&self.state.db)
+            .insert(txn)
             .await
             .map_err(db_err)?;
             next_id += 1;
@@ -322,7 +341,7 @@ impl PermissionService {
                     updated_at: Set(Some(crate::data::now())),
                     ..Default::default()
                 }
-                .insert(&self.state.db)
+                .insert(txn)
                 .await
                 .map_err(db_err)?;
             } else {
@@ -333,7 +352,7 @@ impl PermissionService {
                     updated_at: Set(Some(crate::data::now())),
                     ..Default::default()
                 }
-                .insert(&self.state.db)
+                .insert(txn)
                 .await
                 .map_err(db_err)?;
             }
@@ -454,8 +473,7 @@ impl proto::gen::services::PermissionServiceHandlers for PermissionService {
                 a.status = Set(Some(if v == 0 { "OFF".into() } else { "ON".into() }));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         if let Some(data) = &req.data {
             if !data.menu_ids.is_empty() {

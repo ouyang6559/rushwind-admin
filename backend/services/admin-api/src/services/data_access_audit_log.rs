@@ -1,10 +1,10 @@
 //! DataAccessAuditLogService — List/Get over `sys_data_access_audit_logs`
-//! .
 
 use std::sync::Arc;
 
 use sea_orm::EntityTrait;
 
+use crate::mapping;
 use crate::state::{db_err, not_found, AppState, StatusError};
 use proto::proto::audit::service::v1::{
     DataAccessAuditLog, GetDataAccessAuditLogRequest, ListDataAccessAuditLogResponse,
@@ -23,34 +23,19 @@ fn log_proto(r: crate::data::sys_data_access_audit_logs::Model) -> DataAccessAud
         data_source: r.data_source,
         table_name: r.table_name,
         data_id: r.data_id,
-        access_type: r.access_type.as_deref().map(|s| match s {
-            "INSERT" => 1,
-            "UPDATE" => 2,
-            "DELETE" => 3,
-            "VIEW" => 4,
-            "BULK_READ" => 5,
-            "EXPORT" => 6,
-            "IMPORT" => 7,
-            "DDL_CREATE" => 8,
-            "DDL_ALTER" => 9,
-            "DDL_DROP" => 10,
-            "METADATA_READ" => 11,
-            "SCAN" => 12,
-            "ADMIN_OPERATION" => 13,
-            "OTHER" => 14,
-            _ => 0, // SELECT
-        }),
+        access_type: r
+            .access_type
+            .as_deref()
+            .map(|s| mapping::data_access_type_of(s).unwrap_or(0)),
         sql_digest: r.sql_digest,
         sql_text: r.sql_text,
         affected_rows: r.affected_rows,
         latency_ms: r.latency_ms,
         success: r.success,
-        sensitive_level: r.sensitive_level.as_deref().map(|s| match s {
-            "INTERNAL" => 1,
-            "CONFIDENTIAL" => 2,
-            "SECRET" => 3,
-            _ => 0,
-        }),
+        sensitive_level: r
+            .sensitive_level
+            .as_deref()
+            .map(|s| mapping::data_access_sensitive_level_of(s).unwrap_or(0)),
         data_masked: r.data_masked,
         masking_rules: r.masking_rules,
         business_purpose: r.business_purpose,

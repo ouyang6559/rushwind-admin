@@ -14,7 +14,7 @@ use proto::proto::identity::service::v1::{
     UploadAvatarResponse, User, VerifyContactRequest,
 };
 
-use crate::services::{load_user, user_to_proto};
+use crate::services::user::{load_user, user_to_proto};
 use crate::state::{internal_error, status_error, AppState};
 
 pub struct UserProfileService {
@@ -176,8 +176,7 @@ impl UserProfileServiceHandlers for UserProfileService {
                 }));
             }
         }
-        active.updated_by = Set(Some(payload.user_id));
-        active.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(active, payload.user_id);
         active
             .update(&self.state.db)
             .await

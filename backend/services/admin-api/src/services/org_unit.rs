@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, Set};
 
+use crate::mapping;
 use crate::state::{
     db_err, internal_error, not_found, operator_of, status_error, tenant_of, AppState, StatusError,
 };
@@ -18,30 +19,13 @@ use proto::proto::identity::service::v1::{
 };
 use proto::proto::pagination::PagingRequest;
 
+/// Unknown rows read as DEPARTMENT.
 fn org_type_to_proto(s: &str) -> i32 {
-    match s {
-        "COMPANY" => 1,
-        "DIVISION" => 2,
-        "TEAM" => 3,
-        "PROJECT" => 4,
-        "COMMITTEE" => 5,
-        "REGION" => 6,
-        "OTHER" => 7,
-        _ => 0, // DEPARTMENT
-    }
+    mapping::org_unit_type_of(s).unwrap_or(0)
 }
 
 fn org_type_to_str(v: i32) -> String {
-    match v {
-        1 => "COMPANY".into(),
-        2 => "DIVISION".into(),
-        3 => "TEAM".into(),
-        4 => "PROJECT".into(),
-        5 => "COMMITTEE".into(),
-        6 => "REGION".into(),
-        7 => "OTHER".into(),
-        _ => "DEPARTMENT".into(),
-    }
+    mapping::org_unit_type_str(v).unwrap_or("DEPARTMENT").into()
 }
 
 fn org_proto(r: crate::data::sys_org_units::Model) -> OrgUnit {
@@ -56,7 +40,7 @@ fn org_proto(r: crate::data::sys_org_units::Model) -> OrgUnit {
             r.type_column.as_deref().unwrap_or("DEPARTMENT"),
         )),
         path: r.path,
-        status: r.status.as_deref().map(|s| if s == "OFF" { 0 } else { 1 }),
+        status: r.status.as_deref().map(crate::state::status_to_proto),
         sort_order: r.sort_order,
         business_scopes: r
             .business_scopes
@@ -322,8 +306,7 @@ impl proto::gen::services::OrgUnitServiceHandlers for OrgUnitService {
                 a.permission_tags = Set(None);
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         let updated = a.update(&self.state.db).await.map_err(db_err)?;
 
         // relocateSubtree: BFS over the parent links — recompute this

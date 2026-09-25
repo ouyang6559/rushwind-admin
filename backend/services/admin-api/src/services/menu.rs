@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
+use crate::mapping;
 use crate::state::{db_err, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::pagination::PagingRequest;
@@ -13,56 +14,23 @@ use proto::proto::permission::service::v1::{
     UpdateMenuRequest,
 };
 
+/// Unknown rows read as MENU, the wire enum's default variant.
 fn type_to_proto(s: &str) -> i32 {
-    match s {
-        "CATALOG" => 0,
-        "BUTTON" => 2,
-        "EMBEDDED" => 3,
-        "LINK" => 4,
-        _ => 1,
-    }
+    mapping::menu_type_of(s).unwrap_or(1)
 }
 
 fn type_to_str(v: i32) -> String {
-    match v {
-        0 => "CATALOG".into(),
-        2 => "BUTTON".into(),
-        3 => "EMBEDDED".into(),
-        4 => "LINK".into(),
-        _ => "MENU".into(),
-    }
+    mapping::menu_type_str(v).unwrap_or("MENU").into()
 }
 
+/// Unknown rows read as the zero module.
 fn module_to_proto(s: &str) -> i32 {
-    match s {
-        "OPM" => 2,
-        "SYSTEM" => 3,
-        "DICT" => 4,
-        "TENANT" => 5,
-        "PERMISSION" => 6,
-        "LOG" => 7,
-        "INTERNAL_MESSAGE" => 8,
-        "FILE" => 9,
-        "TASK" => 10,
-        "DASHBOARD" => 1,
-        _ => 0,
-    }
+    mapping::menu_module_of(s).unwrap_or(0)
 }
 
+/// Unknown rows read as SYSTEM.
 fn module_to_str(v: i32) -> String {
-    match v {
-        1 => "DASHBOARD".into(),
-        2 => "OPM".into(),
-        3 => "SYSTEM".into(),
-        4 => "DICT".into(),
-        5 => "TENANT".into(),
-        6 => "PERMISSION".into(),
-        7 => "LOG".into(),
-        8 => "INTERNAL_MESSAGE".into(),
-        9 => "FILE".into(),
-        10 => "TASK".into(),
-        _ => "SYSTEM".into(),
-    }
+    mapping::menu_module_str(v).unwrap_or("SYSTEM").into()
 }
 
 fn menu_proto(r: crate::data::sys_menus::Model) -> Menu {
@@ -75,10 +43,7 @@ fn menu_proto(r: crate::data::sys_menus::Model) -> Menu {
         alias: r.alias,
         name: Some(r.name),
         component: r.component,
-        meta: r
-            .meta
-            .as_ref()
-            .and_then(crate::services::menu_meta_from_json),
+        meta: r.meta.as_ref().and_then(menu_meta_from_json),
         module: r.module.as_deref().map(module_to_proto),
         parent_id: r.parent_id,
         children: Vec::new(),
@@ -125,7 +90,7 @@ impl MenuService {
             a.parent_id = Set(if v == 0 { None } else { Some(v) });
         }
         if let Some(meta) = &data.meta {
-            a.meta = Set(Some(crate::services::menu_meta_to_json(meta)));
+            a.meta = Set(Some(menu_meta_to_json(meta)));
         }
     }
 }
@@ -198,8 +163,7 @@ impl proto::gen::services::MenuServiceHandlers for MenuService {
         let mut a: crate::data::sys_menus::ActiveModel = row.into();
         if let Some(data) = &req.data {
             Self::apply_fields(&mut a, data);
-            a.updated_by = Set(Some(payload.user_id));
-            a.updated_at = Set(Some(crate::data::now()));
+            crate::stamp_update!(a, payload.user_id);
             a.update(&self.state.db).await.map_err(db_err)?;
         }
         Ok(Empty {})
@@ -259,8 +223,7 @@ impl proto::gen::services::MenuServiceHandlers for MenuService {
                     {
                         let mut a: crate::data::sys_menus::ActiveModel = row.into();
                         Self::apply_fields(&mut a, data);
-                        a.updated_by = Set(Some(payload.user_id));
-                        a.updated_at = Set(Some(crate::data::now()));
+                        crate::stamp_update!(a, payload.user_id);
                         a.update(&self.state.db).await.map_err(db_err)?;
                     }
                 }
@@ -282,4 +245,102 @@ impl proto::gen::services::MenuServiceHandlers for MenuService {
         }
         Ok(Empty {})
     }
+}
+
+/// entity jsonb (protojson keys) → MenuMeta proto.
+pub(crate) fn menu_meta_from_json(
+    value: &serde_json::Value,
+) -> Option<proto::proto::permission::service::v1::MenuMeta> {
+    let obj = value.as_object()?;
+    let str_at = |k: &str| obj.get(k).and_then(|v| v.as_str()).map(String::from);
+    let bool_at = |k: &str| obj.get(k).and_then(|v| v.as_bool());
+    let i32_at = |k: &str| obj.get(k).and_then(|v| v.as_i64()).map(|v| v as i32);
+    Some(proto::proto::permission::service::v1::MenuMeta {
+        active_icon: str_at("activeIcon"),
+        active_path: str_at("activePath"),
+        affix_tab: bool_at("affixTab"),
+        affix_tab_order: i32_at("affixTabOrder"),
+        authority: obj
+            .get("authority")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        badge: str_at("badge"),
+        badge_type: str_at("badgeType"),
+        badge_variants: str_at("badgeVariants"),
+        hide_children_in_menu: bool_at("hideChildrenInMenu"),
+        hide_in_breadcrumb: bool_at("hideInBreadcrumb"),
+        hide_in_menu: bool_at("hideInMenu"),
+        hide_in_tab: bool_at("hideInTab"),
+        icon: str_at("icon"),
+        iframe_src: str_at("iframeSrc"),
+        ignore_access: bool_at("ignoreAccess"),
+        keep_alive: bool_at("keepAlive"),
+        link: str_at("link"),
+        loaded: bool_at("loaded"),
+        max_num_of_open_tab: i32_at("maxNumOfOpenTab"),
+        menu_visible_with_forbidden: bool_at("menuVisibleWithForbidden"),
+        open_in_new_window: bool_at("openInNewWindow"),
+        order: i32_at("order"),
+        title: str_at("title"),
+    })
+}
+
+/// MenuMeta proto → the jsonb shape (protojson camelCase keys).
+pub(crate) fn menu_meta_to_json(
+    meta: &proto::proto::permission::service::v1::MenuMeta,
+) -> serde_json::Value {
+    let mut obj = serde_json::Map::new();
+    let put_str =
+        |obj: &mut serde_json::Map<String, serde_json::Value>, key: &str, v: &Option<String>| {
+            if let Some(v) = v {
+                obj.insert(key.to_string(), serde_json::Value::String(v.clone()));
+            }
+        };
+    let put_bool =
+        |obj: &mut serde_json::Map<String, serde_json::Value>, key: &str, v: Option<bool>| {
+            if let Some(v) = v {
+                obj.insert(key.to_string(), serde_json::Value::Bool(v));
+            }
+        };
+    let put_i32 =
+        |obj: &mut serde_json::Map<String, serde_json::Value>, key: &str, v: Option<i32>| {
+            if let Some(v) = v {
+                obj.insert(key.to_string(), serde_json::json!(v));
+            }
+        };
+    put_str(&mut obj, "activeIcon", &meta.active_icon);
+    put_str(&mut obj, "activePath", &meta.active_path);
+    put_bool(&mut obj, "affixTab", meta.affix_tab);
+    put_i32(&mut obj, "affixTabOrder", meta.affix_tab_order);
+    if !meta.authority.is_empty() {
+        obj.insert("authority".into(), serde_json::json!(meta.authority));
+    }
+    put_str(&mut obj, "badge", &meta.badge);
+    put_str(&mut obj, "badgeType", &meta.badge_type);
+    put_str(&mut obj, "badgeVariants", &meta.badge_variants);
+    put_bool(&mut obj, "hideChildrenInMenu", meta.hide_children_in_menu);
+    put_bool(&mut obj, "hideInBreadcrumb", meta.hide_in_breadcrumb);
+    put_bool(&mut obj, "hideInMenu", meta.hide_in_menu);
+    put_bool(&mut obj, "hideInTab", meta.hide_in_tab);
+    put_str(&mut obj, "icon", &meta.icon);
+    put_str(&mut obj, "iframeSrc", &meta.iframe_src);
+    put_bool(&mut obj, "ignoreAccess", meta.ignore_access);
+    put_bool(&mut obj, "keepAlive", meta.keep_alive);
+    put_str(&mut obj, "link", &meta.link);
+    put_bool(&mut obj, "loaded", meta.loaded);
+    put_i32(&mut obj, "maxNumOfOpenTab", meta.max_num_of_open_tab);
+    put_bool(
+        &mut obj,
+        "menuVisibleWithForbidden",
+        meta.menu_visible_with_forbidden,
+    );
+    put_bool(&mut obj, "openInNewWindow", meta.open_in_new_window);
+    put_i32(&mut obj, "order", meta.order);
+    put_str(&mut obj, "title", &meta.title);
+    serde_json::Value::Object(obj)
 }

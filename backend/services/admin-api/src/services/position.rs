@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
+use crate::mapping;
 use crate::state::{db_err, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::identity::service::v1::{
@@ -20,15 +21,11 @@ fn position_proto(r: crate::data::sys_positions::Model) -> Position {
         code: r.code,
         headcount: r.headcount,
         sort_order: r.sort_order,
-        status: r.status.as_deref().map(|s| if s == "OFF" { 0 } else { 1 }),
-        r#type: r.type_column.as_deref().map(|s| match s {
-            "MANAGER" => 1,
-            "LEAD" => 2,
-            "INTERN" => 3,
-            "CONTRACT" => 4,
-            "OTHER" => 5,
-            _ => 0,
-        }),
+        status: r.status.as_deref().map(crate::state::status_to_proto),
+        r#type: r
+            .type_column
+            .as_deref()
+            .map(|s| mapping::position_type_of(s).unwrap_or(0)),
         remark: r.remark,
         description: r.description,
         job_family: r.job_family,
@@ -165,8 +162,7 @@ impl proto::gen::services::PositionServiceHandlers for PositionService {
                 a.org_unit_id = Set(Some(v));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }

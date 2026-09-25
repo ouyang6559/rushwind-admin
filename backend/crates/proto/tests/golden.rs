@@ -53,14 +53,14 @@ fn zero_value_plain_fields_emit_defaults() {
 /// `keep_local_first: 2`, mobile rule `keep_first: 3 keep_last: 4`, and
 /// the `element = { nested: true }` envelope on `items`).
 fn populated_user_list() -> ListUserResponse {
-    let mut user = User::default();
-    user.username = Some("zhangsan".into());
-    user.email = Some("zhangsan@example.com".into());
-    user.mobile = Some("13812345678".into());
     ListUserResponse {
-        items: vec![user],
+        items: vec![User {
+            username: Some("zhangsan".into()),
+            email: Some("zhangsan@example.com".into()),
+            mobile: Some("13812345678".into()),
+            ..Default::default()
+        }],
         total: 1,
-        ..Default::default()
     }
 }
 

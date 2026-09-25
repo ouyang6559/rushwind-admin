@@ -12,3 +12,13 @@ macro_rules! query_by_id {
     };
 }
 pub(crate) use query_by_id;
+
+/// Stamp the editor columns on an update path: `updated_by` moves to
+/// the operator and `updated_at` to now — always together.
+macro_rules! stamp_update {
+    ($model:expr, $user:expr) => {
+        $model.updated_by = sea_orm::Set(Some($user));
+        $model.updated_at = sea_orm::Set(Some(crate::data::now()));
+    };
+}
+pub(crate) use stamp_update;

@@ -1,10 +1,10 @@
 //! PermissionAuditLogService — List/Get over `sys_permission_audit_logs`
-//! .
 
 use std::sync::Arc;
 
 use sea_orm::EntityTrait;
 
+use crate::mapping;
 use crate::state::{db_err, not_found, AppState, StatusError};
 use proto::proto::audit::service::v1::{
     GetPermissionAuditLogRequest, ListPermissionAuditLogResponse, PermissionAuditLog,
@@ -20,24 +20,10 @@ fn log_proto(r: crate::data::sys_permission_audit_logs::Model) -> PermissionAudi
         target_type: r.target_type,
         target_id: r.target_id,
         target_name: r.target_name,
-        action: r.action.as_deref().map(|s| match s {
-            "GRANT" => 0,
-            "REVOKE" => 1,
-            "UPDATE" => 2,
-            "RESET" => 3,
-            "CREATE" => 4,
-            "DELETE" => 5,
-            "ASSIGN" => 6,
-            "UNASSIGN" => 7,
-            "BULK_GRANT" => 8,
-            "BULK_REVOKE" => 9,
-            "EXPIRE" => 10,
-            "SUSPEND" => 11,
-            "RESUME" => 12,
-            "ROLLBACK" => 13,
-            "OTHER" => 15,
-            _ => 14,
-        }),
+        action: r
+            .action
+            .as_deref()
+            .map(|s| mapping::permission_audit_action_of(s).unwrap_or(14)),
         old_value: r.old_value.as_ref().map(|v| v.to_string()),
         new_value: r.new_value.as_ref().map(|v| v.to_string()),
         ip_address: r.ip_address,

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, Set};
 
 use crate::state::{db_err, not_found, operator_of, status_error, AppState, StatusError};
 use pbjson_types::Empty;
@@ -54,25 +54,17 @@ impl proto::gen::services::LanguageServiceHandlers for LanguageService {
         _ctx: rushwind_http_binding::ctx::RequestContext,
         req: proto::proto::dict::service::v1::GetLanguageRequest,
     ) -> Result<Language, StatusError> {
+        let repo = crate::data::repos::LanguageRepo::new(&self.state.db);
         let id = match req.query_by {
             Some(proto::proto::dict::service::v1::get_language_request::QueryBy::Id(id)) => id,
             Some(proto::proto::dict::service::v1::get_language_request::QueryBy::Code(code)) => {
-                crate::data::sys_languages::Entity::find()
-                    .filter(crate::data::sys_languages::Column::LanguageCode.eq(code))
-                    .one(&self.state.db)
-                    .await
-                    .map_err(db_err)?
-                    .map(|r| r.id)
+                repo.find_id_by_code(&code)
+                    .await?
                     .ok_or_else(|| not_found("language"))?
             }
             None => return Err(status_error("BAD_REQUEST", "query_by required")),
         };
-        let row = crate::data::sys_languages::Entity::find_by_id(id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
-            .ok_or_else(|| not_found("language"))?;
-        Ok(language_proto(row))
+        Ok(language_proto(repo.get_by_id(id).await?))
     }
 
     async fn create(
@@ -82,21 +74,20 @@ impl proto::gen::services::LanguageServiceHandlers for LanguageService {
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
         let data = crate::state::require_data(req.data)?;
-        crate::data::sys_languages::ActiveModel {
-            language_code: Set(data.language_code.unwrap_or_default()),
-            language_name: Set(data.language_name.unwrap_or_default()),
-            native_name: Set(data.native_name),
-            is_default: Set(data.is_default.or(Some(false))),
-            is_enabled: Set(data.is_enabled.or(Some(true))),
-            sort_order: Set(data.sort_order.or(Some(0))),
-            created_by: Set(Some(payload.user_id)),
-            created_at: Set(Some(crate::data::now())),
-            updated_at: Set(Some(crate::data::now())),
-            ..Default::default()
-        }
-        .insert(&self.state.db)
-        .await
-        .map_err(db_err)?;
+        crate::data::repos::LanguageRepo::new(&self.state.db)
+            .insert(crate::data::sys_languages::ActiveModel {
+                language_code: Set(data.language_code.unwrap_or_default()),
+                language_name: Set(data.language_name.unwrap_or_default()),
+                native_name: Set(data.native_name),
+                is_default: Set(data.is_default.or(Some(false))),
+                is_enabled: Set(data.is_enabled.or(Some(true))),
+                sort_order: Set(data.sort_order.or(Some(0))),
+                created_by: Set(Some(payload.user_id)),
+                created_at: Set(Some(crate::data::now())),
+                updated_at: Set(Some(crate::data::now())),
+                ..Default::default()
+            })
+            .await?;
         Ok(Empty {})
     }
 
@@ -105,8 +96,9 @@ impl proto::gen::services::LanguageServiceHandlers for LanguageService {
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: BatchCreateLanguagesRequest,
     ) -> Result<Empty, StatusError> {
+        let repo = crate::data::repos::LanguageRepo::new(&self.state.db);
         for data in req.items {
-            crate::data::sys_languages::ActiveModel {
+            repo.insert(crate::data::sys_languages::ActiveModel {
                 language_code: Set(data.language_code.unwrap_or_default()),
                 language_name: Set(data.language_name.unwrap_or_default()),
                 native_name: Set(data.native_name),
@@ -117,10 +109,8 @@ impl proto::gen::services::LanguageServiceHandlers for LanguageService {
                 created_at: Set(Some(crate::data::now())),
                 updated_at: Set(Some(crate::data::now())),
                 ..Default::default()
-            }
-            .insert(&self.state.db)
-            .await
-            .map_err(db_err)?;
+            })
+            .await?;
         }
         Ok(Empty {})
     }
@@ -131,12 +121,8 @@ impl proto::gen::services::LanguageServiceHandlers for LanguageService {
         req: UpdateLanguageRequest,
     ) -> Result<Empty, StatusError> {
         let payload = operator_of(&ctx)?;
-        let row = crate::data::sys_languages::Entity::find_by_id(req.id)
-            .one(&self.state.db)
-            .await
-            .map_err(db_err)?
-            .ok_or_else(|| not_found("language"))?;
-        let mut a: crate::data::sys_languages::ActiveModel = row.into();
+        let repo = crate::data::repos::LanguageRepo::new(&self.state.db);
+        let mut a: crate::data::sys_languages::ActiveModel = repo.get_by_id(req.id).await?.into();
         if let Some(data) = &req.data {
             if let Some(v) = data.language_name.clone() {
                 a.language_name = Set(v);
@@ -154,8 +140,7 @@ impl proto::gen::services::LanguageServiceHandlers for LanguageService {
                 a.sort_order = Set(Some(v));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }
@@ -169,10 +154,9 @@ impl proto::gen::services::LanguageServiceHandlers for LanguageService {
             req.query_by,
             proto::proto::dict::service::v1::delete_language_request::QueryBy
         );
-        crate::data::sys_languages::Entity::delete_by_id(id)
-            .exec(&self.state.db)
-            .await
-            .map_err(db_err)?;
+        crate::data::repos::LanguageRepo::new(&self.state.db)
+            .delete_by_id(id)
+            .await?;
         Ok(Empty {})
     }
 }

@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
+use crate::mapping;
 use crate::state::{db_err, not_found, operator_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::authentication::service::v1::{
@@ -13,40 +14,24 @@ use proto::proto::authentication::service::v1::{
 };
 use proto::proto::pagination::PagingRequest;
 
+/// Unknown rows read as BLACKLIST.
 fn type_to_str(v: i32) -> String {
-    match v {
-        1 => "BLACKLIST".into(),
-        2 => "WHITELIST".into(),
-        _ => "BLACKLIST".into(),
-    }
+    mapping::login_policy_type_str(v)
+        .unwrap_or("BLACKLIST")
+        .into()
 }
 
 fn type_to_proto(s: &str) -> i32 {
-    match s {
-        "WHITELIST" => 2,
-        _ => 1,
-    }
+    mapping::login_policy_type_of(s).unwrap_or(1)
 }
 
+/// Unknown rows read as IP.
 fn method_to_str(v: i32) -> String {
-    match v {
-        1 => "IP".into(),
-        2 => "MAC".into(),
-        3 => "REGION".into(),
-        4 => "TIME".into(),
-        5 => "DEVICE".into(),
-        _ => "IP".into(),
-    }
+    mapping::login_policy_method_str(v).unwrap_or("IP").into()
 }
 
 fn method_to_proto(s: &str) -> i32 {
-    match s {
-        "MAC" => 2,
-        "REGION" => 3,
-        "TIME" => 4,
-        "DEVICE" => 5,
-        _ => 1,
-    }
+    mapping::login_policy_method_of(s).unwrap_or(1)
 }
 
 fn policy_proto(r: crate::data::sys_login_policies::Model) -> LoginPolicy {
@@ -170,8 +155,7 @@ impl proto::gen::services::LoginPolicyServiceHandlers for LoginPolicyService {
                 a.method = Set(Some(method_to_str(v)));
             }
         }
-        a.updated_by = Set(Some(payload.user_id));
-        a.updated_at = Set(Some(crate::data::now()));
+        crate::stamp_update!(a, payload.user_id);
         a.update(&self.state.db).await.map_err(db_err)?;
         Ok(Empty {})
     }

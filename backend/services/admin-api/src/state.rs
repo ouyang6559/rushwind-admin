@@ -174,10 +174,9 @@ pub fn tenant_of(ctx: &rushwind_http_binding::ctx::RequestContext) -> u32 {
     operator_of(ctx).map(|p| p.tenant_id).unwrap_or(0)
 }
 
-/// Repository-layer DB failure → the Unknown envelope.
-pub fn db_err(e: sea_orm::DbErr) -> StatusError {
-    internal_error(format!("db: {e}"))
-}
+// The repository-layer DB failure mapping lives in the framework
+// bridge crate; re-exported so the repositories' paths stay put.
+pub use rushwind_storage_seaorm_support::db_err;
 
 pub fn not_found(what: &str) -> StatusError {
     status_error("NOT_FOUND", format!("{what} not found"))
@@ -198,38 +197,7 @@ pub fn require_data<T>(data: Option<T>) -> Result<T, StatusError> {
     data.ok_or_else(|| status_error("BAD_REQUEST", "data required"))
 }
 
-/// Naive local datetime → protojson Timestamp (pbjson).
-pub fn naive_to_ts(value: chrono::NaiveDateTime) -> Option<pbjson_types::Timestamp> {
-    use chrono::TimeZone as _;
-    let utc = chrono::Utc.from_utc_datetime(&value);
-    Some(pbjson_types::Timestamp {
-        seconds: utc.timestamp(),
-        nanos: utc.timestamp_subsec_nanos() as i32,
-    })
-}
-
-/// protojson Timestamp → naive local datetime.
-pub fn ts_to_naive(value: &pbjson_types::Timestamp) -> Option<chrono::NaiveDateTime> {
-    use chrono::TimeZone as _;
-    Some(
-        chrono::Utc
-            .timestamp_opt(value.seconds, value.nanos.max(0) as u32)
-            .single()?
-            .naive_utc(),
-    )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{naive_to_ts, ts_to_naive};
-
-    #[test]
-    fn timestamp_roundtrip_is_identity() {
-        let naive = chrono::NaiveDate::from_ymd_opt(2024, 3, 1)
-            .unwrap()
-            .and_hms_opt(12, 30, 0)
-            .unwrap();
-        let ts = naive_to_ts(naive).unwrap();
-        assert_eq!(ts_to_naive(&ts).unwrap(), naive);
-    }
-}
+// The entity-time ↔ proto-Timestamp conversions live in the framework
+// bridge crate; re-exported so the mappers' paths stay put (the
+// roundtrip is pinned by the crate's own suite).
+pub use rushwind_storage_seaorm_support::time::{naive_to_ts, ts_to_naive};

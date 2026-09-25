@@ -27,8 +27,9 @@ target
 backend/testbed/reports/
 
 # Mimosa security-scanner state (findings ledger, hook state, reports —
-# regenerated per scan, never source)
-backend/.mimosa/
+# regenerated per scan, never source; the scanner nests state beside
+# whatever tree it walks)
+.mimosa/
 
 # Frontend react snapshot build artifacts (the snapshot itself is synced
 # via frontend/admin/sync-react.sh and must stay byte-clean)

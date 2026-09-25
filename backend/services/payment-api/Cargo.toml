@@ -1,0 +1,59 @@
+[package]
+name = "payment-api"
+description = "The payment service (juhepay rewrite): a wire-compatible merchant/channel gateway plus the ledger, channel-adapter, routing, risk, payout and back-office surfaces, over the shared rushwind stack (axum / SeaORM+PostgreSQL / Redis)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# Lifecycle assembler + shutdown signal (mirrors admin-api).
+rushwind-bootstrap = { git = "https://github.com/tx7do/rushwind", rev = "2bc3a96c742539a195b608b995be1c3bcc1545a3" }
+rushwind-transport = { git = "https://github.com/tx7do/rushwind", rev = "2bc3a96c742539a195b608b995be1c3bcc1545a3" }
+# Storage + migration.
+sea-orm = { workspace = true }
+rushwind-storage-seaorm-migration = { git = "https://github.com/tx7do/rushwind", rev = "2bc3a96c742539a195b608b995be1c3bcc1545a3" }
+redis = { workspace = true }
+# HTTP edge (the gateway is hand-written axum routes, not proto codegen).
+axum = { version = "0.8", default-features = false, features = [
+    "http1",
+    "tokio",
+    "query",
+    "json",
+    "form",
+    "multipart",
+] }
+tokio = { workspace = true, features = ["fs"] }
+# Wire-compat signing needs md5; money/rate math stays integer-scaled.
+md5 = "0.7"
+hex = { workspace = true }
+# Google-authenticator TOTP (spec/05 §10 second factor): HMAC-SHA1 over a
+# base32 secret. Pure compute, no external service.
+hmac = { workspace = true }
+sha1 = { workspace = true }
+# The payout-API `extends` param is a base64 JSON blob (spec/04 §7.1); decode
+# it for the `additional` snapshot like the legacy `base64_decode`.
+base64 = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+chrono = { workspace = true }
+async-trait = { workspace = true }
+rand = { workspace = true }
+tracing = "0.1"
+# Merchant outbound notify (EditMoney returntype=0 → async curl, spec/02 §4.6).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# Task-queue worker + cron producer (T+1 thaw schedule, spec/02 §6.2).
+rushwind-transport-cron = { workspace = true }
+rushwind-apalis-postgres = { git = "https://github.com/tx7do/rushwind", rev = "2bc3a96c742539a195b608b995be1c3bcc1545a3" }
+apalis-core = { workspace = true }
+futures-util = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+# DB-gated integration tests (`tests/ledger_db.rs`) seed entities directly.
+sea-orm = { workspace = true }

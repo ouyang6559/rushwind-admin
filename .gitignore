@@ -26,6 +26,10 @@ target
 # Differential rig run artifacts (regenerated per sweep)
 backend/testbed/reports/
 
+# Mimosa security-scanner state (findings ledger, hook state, reports —
+# regenerated per scan, never source)
+backend/.mimosa/
+
 # Frontend react snapshot build artifacts (the snapshot itself is synced
 # via frontend/admin/sync-react.sh and must stay byte-clean)
 frontend/admin/react/node_modules/

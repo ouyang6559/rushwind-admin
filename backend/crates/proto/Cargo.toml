@@ -18,15 +18,12 @@ pbjson-types = { workspace = true }
 serde = { workspace = true }
 async-trait = { workspace = true }
 axum = { version = "0.8", default-features = false }
-rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "01b4ffe28116df78bf725ae246a5bb5832205cc0" }
-rushwind-redact = { git = "https://github.com/tx7do/rushwind", rev = "01b4ffe28116df78bf725ae246a5bb5832205cc0" }
-rushwind-storage-seaorm-support = { git = "https://github.com/tx7do/rushwind", rev = "01b4ffe28116df78bf725ae246a5bb5832205cc0" }
+rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "7629efbab4e240d349b6c9bd22ebf97763520fb8" }
+rushwind-redact = { git = "https://github.com/tx7do/rushwind", rev = "7629efbab4e240d349b6c9bd22ebf97763520fb8" }
+rushwind-storage-seaorm-support = { git = "https://github.com/tx7do/rushwind", rev = "7629efbab4e240d349b6c9bd22ebf97763520fb8" }
 
 [build-dependencies]
-prost-build = { workspace = true }
-protox = { workspace = true }
-pbjson-build = { workspace = true }
-rushwind-gen-http = { git = "https://github.com/tx7do/rushwind", rev = "01b4ffe28116df78bf725ae246a5bb5832205cc0" }
+rushwind-proto-build = { git = "https://github.com/tx7do/rushwind", rev = "7629efbab4e240d349b6c9bd22ebf97763520fb8" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }

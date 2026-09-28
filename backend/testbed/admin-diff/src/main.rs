@@ -18,6 +18,7 @@ struct Args {
     exemptions: String,
     out: String,
     wait: u64,
+    repo: String,
 }
 
 fn usage() -> ! {
@@ -37,6 +38,7 @@ fn parse_args() -> Args {
         exemptions: "testbed/exemptions.json".into(),
         out: "testbed/reports/report.jsonl".into(),
         wait: 180,
+        repo: ".".into(),
     };
     let mut it = std::env::args().skip(1);
     while let Some(flag) = it.next() {
@@ -51,6 +53,7 @@ fn parse_args() -> Args {
             "--exemptions" => args.exemptions = value,
             "--out" => args.out = value,
             "--wait" => args.wait = value.parse().unwrap_or(180),
+            "--repo" => args.repo = value,
             _ => usage(),
         }
     }
@@ -156,16 +159,19 @@ fn verdict_name(verdict: Verdict) -> &'static str {
 fn main() {
     let args = parse_args();
     let exemptions = load_exemptions(&args.exemptions);
-    let sweep_cases = sweep();
+    let gen_services =
+        admin_diff::corpus::gen_service_fqs(&std::path::Path::new(&args.repo).join(".rush"));
+    let sweep_cases = sweep(&gen_services);
     let sweep_count = sweep_cases.len();
     let curated = load_curated(&args.corpus_dir);
     let curated_count = curated.len();
     let mut cases = sweep_cases;
     cases.extend(curated);
     eprintln!(
-        "corpus: {} cases (sweep {sweep_count} + curated {curated_count}), exempt classes: {}",
+        "corpus: {} cases (sweep {sweep_count} + curated {curated_count}), exempt classes: {}, gen services: {}",
         cases.len(),
-        exemptions.len()
+        exemptions.len(),
+        gen_services.len()
     );
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(10))

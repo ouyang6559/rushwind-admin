@@ -7,7 +7,14 @@
 //! * gated routes — [`Kind::EnvelopeExact`]: both sides must answer the
 //!   identical 401 `UNAUTHORIZED` / `missing bearer token` envelope bytes;
 //! * public routes — [`Kind::Pending`]: the Rust side is a null stub until
-//!   its module lands; both responses are recorded, nothing asserted.
+//!   its module lands; both responses are recorded, nothing asserted;
+//! * gen-product routes — class `sweep-gen`, [`Kind::Pending`]: routes
+//!   whose service is a `.rush/` spec entity (rush gen entity's output)
+//!   have no Go reference at all — the Go stack answers 404 where the
+//!   Rust gate answers its 401, so an EnvelopeExact probe would fail on
+//!   presence, not behavior. They ride Pending (record-only) until the
+//!   upstream Go stack adopts the same surface, at which point the case
+//!   graduates by hand into the gated class with real payload probes.
 //!
 //! GET routes additionally emit a HEAD probe (class `head-on-get`) — the
 //! recorded micro-divergence where axum's `MethodFilter::GET` serves HEAD
@@ -106,25 +113,88 @@ fn concretize(path: &str) -> String {
     out
 }
 
+/// The classification of one sweep route (pure, unit-testable).
+/// `gen_services` carries the fully-qualified service names of the
+/// `.rush/` spec entities — rush gen entity's output surface.
+pub fn classify_route(
+    service_fq: &str,
+    method_name: &str,
+    shadowed: bool,
+    auth_free: &[(&'static str, &'static str)],
+    gen_services: &std::collections::BTreeSet<String>,
+) -> (&'static str, Kind) {
+    let gated = !auth_free
+        .iter()
+        .any(|(s, m)| *s == service_fq && *m == method_name);
+    if gen_services.contains(service_fq) {
+        // The Go reference does not serve this surface: presence itself
+        // diverges, so the honest contract is record-only.
+        return ("sweep-gen", Kind::Pending);
+    }
+    if shadowed {
+        // The shadow set: the go stack's first-match mux routes
+        // these paths to the earlier pattern route, whose path-variable
+        // bind is malformed for the literal segment — the pre/post-auth
+        // ordering divergence the exemption set registers.
+        return ("router-shadow", Kind::EnvelopeShape);
+    }
+    if gated {
+        ("sweep-gated", Kind::EnvelopeExact)
+    } else {
+        ("sweep-public", Kind::Pending)
+    }
+}
+
+/// The `.rush/` spec directory's service fqs on the admin face —
+/// `admin.service.v1.<Pascal>Service` per spec entity. The rig has no
+/// rush-gen dependency, so the Pascal rule repeats here on purpose
+/// (spec names are snake_case; the generator capitalizes per segment).
+pub fn gen_service_fqs(rush_dir: &std::path::Path) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    let Ok(entries) = std::fs::read_dir(rush_dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e != "json") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        let Some(name) = value.get("name").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let pascal = name
+            .split('_')
+            .map(|part| {
+                let mut cs = part.chars();
+                match cs.next() {
+                    Some(first) => first.to_ascii_uppercase().to_string() + cs.as_str(),
+                    None => String::new(),
+                }
+            })
+            .collect::<String>();
+        out.insert(format!("admin.service.v1.{pascal}Service"));
+    }
+    out
+}
+
 /// Builds the sweep from the generated route table.
-pub fn sweep() -> Vec<Case> {
+pub fn sweep(gen_services: &std::collections::BTreeSet<String>) -> Vec<Case> {
     let mut cases = Vec::new();
     for (idx, spec) in proto::gen::routes::ROUTES.iter().enumerate() {
         let concrete = concretize(spec.path);
-        let gated = !proto::AUTH_FREE
-            .iter()
-            .any(|(s, m)| *s == spec.service_fq && *m == spec.method_name);
-        let (class, kind) = if spec.shadowed {
-            // The shadow set: the go stack's first-match mux routes
-            // these paths to the earlier pattern route, whose path-variable
-            // bind is malformed for the literal segment — the pre/post-auth
-            // ordering divergence the exemption set registers.
-            ("router-shadow", Kind::EnvelopeShape)
-        } else if gated {
-            ("sweep-gated", Kind::EnvelopeExact)
-        } else {
-            ("sweep-public", Kind::Pending)
-        };
+        let (class, kind) = classify_route(
+            spec.service_fq,
+            spec.method_name,
+            spec.shadowed,
+            proto::AUTH_FREE,
+            gen_services,
+        );
         cases.push(Case {
             id: format!("sweep-{idx}"),
             class: class.into(),
@@ -201,5 +271,93 @@ pub fn load_exemptions(path: &str) -> HashMap<String, String> {
             eprintln!("exemption file parse error: {e} (none applied)");
             HashMap::new()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    fn gen(fq: &str) -> BTreeSet<String> {
+        let mut set = BTreeSet::new();
+        set.insert(fq.to_string());
+        set
+    }
+
+    const AUTH_FREE: &[(&str, &str)] = &[("admin.service.v1.OpenService", "List")];
+
+    #[test]
+    fn gen_product_routes_ride_pending_before_everything() {
+        // A gen-entity service: Pending even though it is gated and not
+        // shadowed — the Go reference has no such surface.
+        let (class, kind) = classify_route(
+            "admin.service.v1.WidgetService",
+            "List",
+            false,
+            AUTH_FREE,
+            &gen("admin.service.v1.WidgetService"),
+        );
+        assert_eq!(class, "sweep-gen");
+        assert_eq!(kind, Kind::Pending);
+
+        // Shadowed gen routes stay gen (presence, not the shadow quirk).
+        let (class, kind) = classify_route(
+            "admin.service.v1.WidgetService",
+            "List",
+            true,
+            AUTH_FREE,
+            &gen("admin.service.v1.WidgetService"),
+        );
+        assert_eq!(class, "sweep-gen");
+        assert_eq!(kind, Kind::Pending);
+    }
+
+    #[test]
+    fn non_gen_routes_keep_their_classes() {
+        let none = BTreeSet::new();
+        let (class, kind) = classify_route(
+            "admin.service.v1.UserService",
+            "Get",
+            false,
+            AUTH_FREE,
+            &none,
+        );
+        assert_eq!((class, kind), ("sweep-gated", Kind::EnvelopeExact));
+        let (class, kind) = classify_route(
+            "admin.service.v1.OpenService",
+            "List",
+            false,
+            AUTH_FREE,
+            &none,
+        );
+        assert_eq!((class, kind), ("sweep-public", Kind::Pending));
+        let (class, kind) = classify_route(
+            "admin.service.v1.UserService",
+            "Get",
+            true,
+            AUTH_FREE,
+            &none,
+        );
+        assert_eq!((class, kind), ("router-shadow", Kind::EnvelopeShape));
+    }
+
+    #[test]
+    fn fqs_read_from_the_rush_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("widget.json"),
+            r#"{"schema":1,"name":"widget","table":"sys_widgets","package":"widget.service.v1","route_prefix":"/admin/v1/widgets","fields":[],"code_field":null,"global":false,"group":null,"stack":null}"#,
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("notes.txt"), "not a spec").unwrap();
+        let fqs = gen_service_fqs(dir.path());
+        assert_eq!(
+            fqs,
+            gen("admin.service.v1.WidgetService"),
+            "txt ignored, name → admin-face fq"
+        );
+        // Empty dir → empty set.
+        assert!(gen_service_fqs(dir.path().join("nope").as_path()).is_empty());
     }
 }

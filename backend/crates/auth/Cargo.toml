@@ -13,7 +13,7 @@ workspace = true
 [dependencies]
 async-trait = { workspace = true }
 proto = { path = "../proto" }
-rushwind-authn = { git = "https://github.com/tx7do/rushwind", rev = "cc80e1cfecc98cb7b027f56ea6adaf46c62cee1e" }
-rushwind-authn-gate = { git = "https://github.com/tx7do/rushwind", rev = "cc80e1cfecc98cb7b027f56ea6adaf46c62cee1e" }
-rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "cc80e1cfecc98cb7b027f56ea6adaf46c62cee1e" }
+rushwind-authn = { git = "https://github.com/tx7do/rushwind", rev = "e5e08915dcdfb0d963e62c5495f0161a79b5ecdd" }
+rushwind-authn-gate = { git = "https://github.com/tx7do/rushwind", rev = "e5e08915dcdfb0d963e62c5495f0161a79b5ecdd" }
+rushwind-http-binding = { git = "https://github.com/tx7do/rushwind", rev = "e5e08915dcdfb0d963e62c5495f0161a79b5ecdd" }
 axum = { version = "0.8", default-features = false, features = ["matched-path"] }

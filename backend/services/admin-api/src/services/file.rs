@@ -21,9 +21,18 @@ use proto::proto::storage::service::v1::{
     CreateFileRequest, DeleteFileRequest, DownloadFileRequest, DownloadFileResponse, File,
     GetFileRequest, ListFileResponse, UpdateFileRequest, UploadFileRequest, UploadFileResponse,
 };
+use rushwind_oss::ObjectStorage as _;
 
 /// oss.MaxUploadSize (pkg/oss/module).
 const MAX_UPLOAD_SIZE: usize = 50 * 1024 * 1024;
+
+/// The local-disk store for one bucket — the no-endpoint profile's
+/// engine, rooted at the data directory's bucket folder (the framework
+/// engine owns the fs details: directory materialization, the NotFound
+/// read, the idempotent delete).
+fn local_store(bucket: &str) -> rushwind_oss_local::LocalStorage {
+    rushwind_oss_local::LocalStorage::new(std::path::Path::new("./data/files").join(bucket))
+}
 
 /// Unknown rows read as the zero provider (LOCAL).
 fn provider_to_proto(s: &str) -> i32 {
@@ -345,8 +354,7 @@ impl proto::gen::services::FileServiceHandlers for FileService {
         if let Some(oss) = self.state.oss.as_ref().and_then(|o| o.storage(&bucket)) {
             let _ = oss.delete(&object_key).await;
         } else {
-            let path = format!("./data/files/{bucket}/{object_key}");
-            let _ = std::fs::remove_file(path);
+            let _ = local_store(&bucket).delete(&object_key).await;
         }
         crate::data::files::Entity::delete_by_id(row.id)
             .exec(&self.state.db)
@@ -452,12 +460,10 @@ impl FileTransferService {
                 (download_url, public_url)
             }
             None => {
-                let object_dir = format!("./data/files/{bucket}/{dir}");
-                std::fs::create_dir_all(&object_dir)
-                    .map_err(|e| internal_error(format!("storage mkdir: {e}")))?;
-                let object_path = format!("{object_dir}/{save_name}");
-                std::fs::write(&object_path, &bytes)
-                    .map_err(|e| internal_error(format!("storage write: {e}")))?;
+                local_store(bucket)
+                    .put(&object_name, &bytes, Some(mime.as_str()))
+                    .await
+                    .map_err(|e| internal_error(format!("storage put: {e}")))?;
                 (object_name.clone(), String::new())
             }
         };
@@ -557,10 +563,11 @@ impl proto::gen::services::FileTransferServiceHandlers for FileTransferService {
                 (bytes, format!("/{bucket}/{object_key}"))
             }
             None => {
-                let path = format!("./data/files/{bucket}/{object_key}");
-                let bytes = std::fs::read(&path)
-                    .map_err(|e| internal_error(format!("storage read: {e}")))?;
-                (bytes, path)
+                let bytes = local_store(&bucket)
+                    .get(&object_key)
+                    .await
+                    .map_err(|e| internal_error(format!("storage get: {e}")))?;
+                (bytes, format!("./data/files/{bucket}/{object_key}"))
             }
         };
         let mime = match row.extension.as_deref() {

@@ -32,7 +32,7 @@ sweep 从 `admin-gen` 的路由表（211 条，与 Go 注册一一对应）自�
 - **gen 产物路由**（`sweep-gen`）→ `Pending`：service 出现在 `.rush/` 规格目录的
   实体链（rush gen entity 的产物）在 Go 参考侧没有对应路由——存在性本身发散
   （Go 404 vs Rust 门 401），按"记录不断言"处理，直到上游 Go 栈收编同面后
-  手工提升为带载荷的门控案例。rig 以 `--repo` 指向仓库根读取 `.rush/`。
+  手工提升为带载荷的门控案例。rig 以 `--repo` 指向仓库根读取 `.rush/`（默认值跟随调用目录：仓库根原样、backend/ 子目录自动上跳）。
 - **公开路由**（8 条，`sweep-public`）→ `Pending`：Rust 侧是 null 桩（500/空
   reason），Go 侧是真实实现——两侧只记录不判定，直到对应模块落地后改契约。
 - **HEAD 探针**（GET 路由，89 条，`head-on-get`）→ `Routing` + 豁免：axum 的

@@ -60,6 +60,14 @@ fn parse_args() -> Args {
     if args.go.is_empty() || args.rust.is_empty() {
         usage();
     }
+    // --repo 的默认值跟随调用目录：仓库根原样；backend/ 子目录调用时
+    // 上跳一级（.rush/ 与 testbed/ 都在仓库根）。
+    if args.repo == "." && !std::path::Path::new("testbed").is_dir() {
+        let parent = std::path::Path::new("..");
+        if parent.join("testbed").is_dir() {
+            args.repo = "..".into();
+        }
+    }
     args
 }
 

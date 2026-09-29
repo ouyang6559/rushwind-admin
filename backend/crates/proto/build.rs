@@ -8,7 +8,7 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/auth_free.rs"));
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     rushwind_proto_build::run(rushwind_proto_build::Build {
         manifest_dir: std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")),
-        vendored_data_files: &["pagination/v1/pagination.proto"],
+        dep_data_files: &["pagination/v1/pagination.proto"],
         auth_free: AUTH_FREE,
         redact_plan_expr: Some("crate::redact_plan()"),
         proto_module_path: "crate::proto",

@@ -160,7 +160,7 @@ GeoIP（mmdb）与 UA 解析用于登录审计；`asynq` cron `30 3 * * *` 归�
 | # | 决策 | 内容与理由 |
 |---|---|---|
 | D1 | **Kratos 兼容错误信封在 admin 侧实现** | rushwind-http 的 `ErrorEnvelope`（code 为字符串、字段名 details）与前端契约不符；直接改框架会破坏其对位 Go 前作的语义。→ admin 内建 `KratosStatus` 信封（code=int32、reason、message、metadata map），状态码与 reason 绑定关系由生成器从 `*_error.proto` 的 `(errors.code)` 注解产出静态表；后续可作为 `rushwind-http` 的可选变体回馈上游。中间件栈（recovery/request-id/logging/CORS/timeout）继续用 rushwind-http。 |
-| D2 | **自建 `protoc-gen-rust-http` 生成器** | 路由 + 绑定 + 服务 trait + 错误表 + 脱敏规则表 + operation id + sys_apis 同步表，全部从 descriptor 生成（Rust 写的 protoc 插件，buf `local:` 调用，或 build.rs 内进程调用）。栈：protox 编译 → FileDescriptorSet → prost-reflect 解析扩展（google.api.http、errors.code、redact、PGV——这些扩展声明文件随 buf 依赖一起 vendor 进 `api/third_party`）→ 生成代码。**绑定语义逐条对位 `protoc-gen-go-http` 生成物**（路径模板变量、query 按 json_name（含嵌套消息点展平）与 oneof 分支、body `*` 全量 protojson、响应 protojson + 空消息 `{}`），差分金样逐端点钉死。这是把 197 条路由的接线成本从「手写失控」压回「一跑生成」的核心。 |
+| D2 | **自建 `protoc-gen-rust-http` 生成器** | 路由 + 绑定 + 服务 trait + 错误表 + 脱敏规则表 + operation id + sys_apis 同步表，全部从 descriptor 生成（Rust 写的 protoc 插件，buf `local:` 调用，或 build.rs 内进程调用）。栈：protox 编译 → FileDescriptorSet → prost-reflect 解析扩展（google.api.http、errors.code、redact、PGV——这些扩展声明文件由 buf.lock 钉定的 BSR 依赖模块解析，不落仓）→ 生成代码。**绑定语义逐条对位 `protoc-gen-go-http` 生成物**（路径模板变量、query 按 json_name（含嵌套消息点展平）与 oneof 分支、body `*` 全量 protojson、响应 protojson + 空消息 `{}`），差分金样逐端点钉死。这是把 197 条路由的接线成本从「手写失控」压回「一跑生成」的核心。 |
 | D3 | **分页算子矩阵** | 前端实际发出的算子集 = 前端 `pagination.ts:42-62` 别名表 ∩ go-crud 25 算子；rushwind `FilterExpr` 支持 17 个关系算子。Phase 0 产出三列矩阵（前端别名 → go-crud 算子 → rushwind 算子），逐一标注 直映/折ILIKE/不支持（不支持者在差分测试中定为「与 Go 同样报错」）。字段名映射表需同时收录 proto 原名与 json_name（对位 Go `fieldperm.ParseTokenEntries` 的双拼写处理）。 |
 | D4 | **DDL 以 Go 迁移产物为黄金** | 空库上跑 Go 后端自动迁移 → `pg_dump --schema-only` 得到黄金 DDL（含全部索引/唯一约束/默认值）→ 按模块切分为 SQL 迁移文件，admin 启动时应用（幂等）。`migrate_create()` 因无索引不用。CI 用同一份 DDL + SQLite 方言子集跑单测（对位 Go 的 sqlite_compat_test）。种子数据：`postgresql-demo-data.sql` 两边同灌；空库引导种子（`pkg/constants/default_data.go`）移植为 Rust 常量表。 |
 | D5 | **任务队列：新建 `rushwind-apalis-redis`** | 对位 asynq（Redis 后端、多队列优先级、cron 表驱动、任务 payload AES-GCM）。若适配器受阻，退路为进程内 cron 调度器（仅覆盖系统任务：租户到期扫描、审计归档、站内信 fan-out、脚本任务）——前端可观测面只是 sys_tasks 的 CRUD 与 start/stop/restart，队列内部语义不直接进契约。 |
@@ -190,9 +190,9 @@ rushwind-admin/
 │   ├── Cargo.toml            # members: crates/* + app/admin/service + pkg/*
 │   ├── api/
 │   │   ├── protos/           # 从 go 仓同步（sync 脚本 + checksum 门）
-│   │   ├── third_party/      # buf 依赖的本地副本：google/api、pagination、redact、validate、gnostic…
-│   │   │                     # （PROVENANCE.md 记录模块@commit，vendor 脚本可再生）
-│   │   └── *.sh              # sync-protos / vendor-third-party
+│   │   ├── buf.lock          # buf 依赖 commit 钉定：google/api、pagination、redact、validate、gnostic…
+│   │   │                     # （与上游 go-wind-admin 的 buf.lock 同源，再同步时比对 commit）
+│   │   └── sync-protos.sh    # 契约同步与校验
 │   ├── app/admin/service/    # 对位 go 仓 app/admin/service/（服务 crate）
 │   │   ├── cmd/server/main.rs        # 入口（JWT 引擎 + 生命周期；对位 cmd/server/main.go）
 │   │   ├── internal/server/rest_server.rs   # 装配（挂载 + 逐路由层组合 + HttpEdge；对位 internal/server/rest_server.go）
@@ -200,7 +200,7 @@ rushwind-admin/
 │   ├── pkg/                  # 对位 go 仓 pkg/（共享包，独立 crate）
 │   │   └── middleware-auth/  # 鉴权门（对位 pkg/middleware/auth）
 │   ├── api/
-│   │   ├── protos|third_party|MANIFEST  # 契约树（sync-protos 同步 + checksum 门）
+│   │   ├── protos|buf.lock|MANIFEST  # 契约树（sync-protos 同步 + checksum 门）+ 依赖钉定
 │   │   └── admin-api/        # 契约 crate（对位 go 仓 api/gen 生成绑定落点）：build.rs 一体产出
 │   │                         #   prost+pbjson 类型（well-known 外部化）+ protoc 注解闭包
 │   │                         #   descriptor/pool + rushwind-gen-http 生成面（路由表/绑定计划/

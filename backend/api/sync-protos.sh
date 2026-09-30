@@ -18,6 +18,10 @@
 # 工作区对工作区比较，报告相对 main 基线的 breaking 差异；
 # FILE 规则下仅【删除/改型】算破坏，纯新增不算。
 set -euo pipefail
+# 字节序排序跨机稳定：MANIFEST 的行序由 sort 决定，UTF-8 locale 的 collation
+# 会忽略标点（i_api.proto 与 i_api_audit_log.proto 的先后随环境翻转），CI 的
+# C locale 因此必红。前端 sync-frontend.sh 早有此钉，此处补齐。
+export LC_ALL=C
 
 MODE="${1:-sync}"
 HERE="$(cd "$(dirname "$0")" && pwd)"

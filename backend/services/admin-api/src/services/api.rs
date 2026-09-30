@@ -223,7 +223,8 @@ impl proto::gen::services::ApiServiceHandlers for ApiService {
         let doc: serde_yaml::Value = serde_yaml::from_str(crate::assets::OPENAPI_DATA)
             .map_err(|e| internal_error(format!("openapi parse: {e}")))?;
 
-        let mut rows: Vec<(String, String, String, String, Option<u32>)> = Vec::new(); // path, method, operation, module, business_module i32
+        // path, method, operation, module, business_module i32
+        let mut rows: Vec<(String, String, String, String, Option<u32>)> = Vec::new();
         let paths = doc
             .get("paths")
             .and_then(|p| p.as_mapping())

@@ -169,7 +169,8 @@ impl Server for ApalisServer {
                                     req.parts.attempt.clone(),
                                 )
                             } else {
-                                let err: BoxDynError = "job decode/execute failed".to_string().into();
+                                let err: BoxDynError =
+                                    "job decode/execute failed".to_string().into();
                                 Response::failure(
                                     ApalisError::Failed(Arc::new(err)),
                                     req.parts.task_id.clone(),

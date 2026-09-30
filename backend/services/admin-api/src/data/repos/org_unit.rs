@@ -75,7 +75,12 @@ impl<'a> OrgUnitRepo<'a> {
     pub async fn descendant_ids(&self, root: u32) -> Result<Vec<u32>, StatusError> {
         let stmt = sea_orm::Statement::from_sql_and_values(
             self.db.get_database_backend(),
-            "WITH RECURSIVE all_descendants AS (SELECT * FROM sys_org_units WHERE parent_id = ? UNION ALL SELECT p.* FROM sys_org_units p INNER JOIN all_descendants ad ON p.parent_id = ad.id) SELECT id FROM all_descendants",
+            "WITH RECURSIVE all_descendants AS (\
+             SELECT * FROM sys_org_units WHERE parent_id = ? \
+             UNION ALL \
+             SELECT p.* FROM sys_org_units p \
+             INNER JOIN all_descendants ad ON p.parent_id = ad.id) \
+             SELECT id FROM all_descendants",
             [root.into()],
         );
         let rows = self

@@ -8,7 +8,10 @@ use sea_orm::{ActiveModelTrait, Set};
 use crate::state::{db_err, not_found, operator_of, tenant_of, AppState, StatusError};
 use pbjson_types::Empty;
 use proto::proto::internal_message::service::v1::{
-    GetInternalMessageCategoryRequest, InternalMessageCategory, ListInternalMessageCategoryResponse,
+    delete_internal_message_category_request::QueryBy as DeleteQueryBy,
+    get_internal_message_category_request::QueryBy as GetQueryBy,
+    GetInternalMessageCategoryRequest, InternalMessageCategory,
+    ListInternalMessageCategoryResponse,
 };
 use proto::proto::pagination::PagingRequest;
 
@@ -58,7 +61,7 @@ impl proto::gen::services::InternalMessageCategoryServiceHandlers
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: GetInternalMessageCategoryRequest,
     ) -> Result<InternalMessageCategory, StatusError> {
-        let id = crate::query_by_id!(req.query_by, proto::proto::internal_message::service::v1::get_internal_message_category_request::QueryBy);
+        let id = crate::query_by_id!(req.query_by, GetQueryBy);
         let scope = crate::data::Viewer::from_ctx(&ctx).tenant_scope();
         let repo = crate::data::repos::InternalMessageCategoryRepo::new(&self.state.db);
         let row = repo
@@ -130,7 +133,7 @@ impl proto::gen::services::InternalMessageCategoryServiceHandlers
         ctx: rushwind_http_binding::ctx::RequestContext,
         req: proto::proto::internal_message::service::v1::DeleteInternalMessageCategoryRequest,
     ) -> Result<Empty, StatusError> {
-        let id = crate::query_by_id!(req.query_by, proto::proto::internal_message::service::v1::delete_internal_message_category_request::QueryBy);
+        let id = crate::query_by_id!(req.query_by, DeleteQueryBy);
         let scope = crate::data::Viewer::from_ctx(&ctx).tenant_scope();
         let repo = crate::data::repos::InternalMessageCategoryRepo::new(&self.state.db);
         repo.delete_scoped(id, scope).await?;

@@ -28,7 +28,8 @@ services:
       - POSTGRESQL_PORT_NUMBER=5432
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=*Abcd123456
-      - POSTGRES_DB=rushwind_admin
+      # 与 go 仓 backend/docker-compose.yaml 逐字一致（data.yaml 的 DSN 烤死 dbname=gwa）
+      - POSTGRES_DB=gwa
     ulimits:
       nofile:
         soft: 65535

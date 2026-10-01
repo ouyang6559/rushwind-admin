@@ -146,16 +146,9 @@ The project advances through the phases defined in [docs/development-plan.md](./
 | Docker | 20.0+ (local middleware / differential test rig) |
 | Node.js + pnpm | per each frontend's `package.json` `engines` (current intersection ≥ 20.19.0), pnpm >= 10.0.0 |
 
-### Sibling Clone Layout
+### Dependency Resolution
 
-This repository references its sibling repositories via relative paths, so clone them **under the same parent directory**:
-
-```text
-<parent>/
-├── rushwind-admin/   # this repo
-├── rushwind/         # RushWind framework monorepo (required)
-└── rust-utils/       # utility library (required)
-```
+Framework and utility dependencies (the RushWind framework, rust-utils) are Git dependencies pinned to fixed revisions — cloning this repo alone is enough to build, no sibling checkouts required. Only when iterating on the framework locally do you clone `rushwind/` as a sibling and temporarily point the workspace `[patch]` section at the local path (a framework-contributor workflow).
 
 ### Backend Startup
 
@@ -166,7 +159,7 @@ cargo run -p admin-api   # binary admin-api, serving REST :7788
 
 - On startup it connects to PostgreSQL and Redis. Configuration lives in `backend/services/admin-api/assets/` (`auth.yaml` / `data.yaml` / `oss.yaml`)
 - `assets/jwt_public_key.pem` and the key embedded in `auth.yaml` are **demo keys** — replace them before any production deployment
-- SSE (:7789) is not available yet
+- Startup sequence: migrations → seed → REST (:7788) + SSE (:7789, `/events`) + task worker + cron, four transports in one lifecycle
 
 ### Contract Sync
 
@@ -296,9 +289,18 @@ rushwind-admin/
 │   │   └── admin-api/              # Admin 服务 crate（src/ 模块树 + assets/ 内嵌资源）
 │   └── testbed/                    # 差分回归台架（compose + admin-diff sweep）
 ├── frontend/                       # three synced frontend snapshots (sync-frontend.sh + dual manifests + RushWind brand overlay)
-├── docs/                           # project docs (binding-spec / development-plan / operator-matrix / screenshots)
+├── docs/                           # project docs (tutorial / doc index / binding-spec / development-plan / operator-matrix / screenshots)
 └── .github/workflows/              # CI (fmt / clippy / test / contract sync gates)
 ```
+
+---
+
+## Documentation
+
+The tutorial and reference documentation starts at [docs/README.md](./docs/README.md):
+
+- **Tutorial layer** ([docs/tutorial/](./docs/tutorial/README.md)) — eight progressive chapters: architecture overview → get it running → contract & codegen chain → first service module → permission model → multi-tenant isolation → audit & compliance → deployment
+- **Reference layer** — engineering baselines such as [binding-spec](./docs/binding-spec.md) (the wire-contract alignment spec); required reading before touching the corresponding subsystem
 
 ---
 

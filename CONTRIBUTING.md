@@ -6,12 +6,11 @@
 
 1. **Fork 并克隆仓库**
 
-   本仓以相对路径引用兄弟仓，请将以下仓库克隆到**同一父目录**下（详见 README 的[同级克隆布局](./README.md#同级克隆布局)）：
+   构建依赖（rushwind 框架、rust-utils）以 Git 依赖按 revision 钉死，clone 本仓即可构建（依赖解析见 [README](./README.md#依赖解析)）；仅当本地迭代框架仓时才需要 checkout 框架仓：
 
    ```bash
    git clone https://github.com/<your-name>/rushwind-admin.git
-   git clone https://github.com/tx7do/rushwind.git        # 框架 monorepo（必须）
-   git clone https://github.com/tx7do/rust-utils.git      # 工具库（必须）
+   # 可选（框架贡献者工作流）：git clone https://github.com/tx7do/rushwind.git
    ```
 
 2. **搭建开发环境**

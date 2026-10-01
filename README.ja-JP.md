@@ -146,16 +146,9 @@
 | Docker | 20.0+（ローカルミドルウェア / 差分テスト台） |
 | Node.js + pnpm | 各フロントエンドの `package.json` `engines` に準拠（現在の制約交集 ≥ 20.19.0）、pnpm >= 10.0.0 |
 
-### 兄弟リポジトリのクローン配置
+### 依存関係の解決
 
-本リポジトリは兄弟リポジトリを相対パスで参照するため、以下のリポジトリを**同じ親ディレクトリ**にクローンしてください：
-
-```text
-<parent>/
-├── rushwind-admin/   # 本リポジトリ
-├── rushwind/         # RushWind フレームワーク monorepo（必須）
-└── rust-utils/       # ユーティリティライブラリ（必須）
-```
+フレームワークおよびユーティリティの依存（RushWind フレームワーク、rust-utils）は Git 依存としてリビジョン固定されており、本リポジトリのクローンだけでビルドできます。兄弟リポジトリは不要です。フレームワークをローカルで改修する場合のみ、`rushwind/` を兄弟ディレクトリにクローンし、ワークスペースの `[patch]` セクションで一時的にローカルパスを指してください（フレームワーク貢献者向けワークフロー）。
 
 ### バックエンド起動
 
@@ -166,7 +159,7 @@ cargo run -p admin-api   # バイナリ admin-api、REST :7788 で待受
 
 - 起動時に PostgreSQL と Redis に接続します。設定は `backend/services/admin-api/assets/`（`auth.yaml` / `data.yaml` / `oss.yaml`）
 - `assets/jwt_public_key.pem` と `auth.yaml` 埋め込み鍵は**デモ用鍵**です。本番導入時は必ず交換してください
-- SSE（:7789）は未対応
+- 起動シーケンス：マイグレーション → シード → REST（:7788）+ SSE（:7789、`/events`）+ タスクワーカー + cron の 4 transport を同一ライフサイクルで起動
 
 ### 契約同期
 
@@ -296,9 +289,18 @@ rushwind-admin/
 │   │   └── admin-api/              # Admin 服务 crate（src/ 模块树 + assets/ 内嵌资源）
 │   └── testbed/                    # 差分回归台架（compose + admin-diff sweep）
 ├── frontend/                       # 3 フロントエンド同期スナップショット（sync-frontend.sh + 双マニフェストゲート + RushWind ブランドオーバーレイ）
-├── docs/                           # プロジェクトドキュメント（binding-spec / development-plan / operator-matrix / screenshots）
+├── docs/                           # プロジェクトドキュメント（チュートリアル tutorial / 索引 README / binding-spec / development-plan / operator-matrix / screenshots）
 └── .github/workflows/              # CI（fmt / clippy / test / 契約同期ゲート）
 ```
+
+---
+
+## ドキュメント
+
+チュートリアルとリファレンスは [docs/README.md](./docs/README.md) から：
+
+- **チュートリアル層**（[docs/tutorial/](./docs/tutorial/README.md)）—— 全 8 章の段階的学習：アーキテクチャ概観 → ローカル起動 → 契約とコード生成 → 最初のサービスモジュール → 権限モデル → マルチテナント分離 → 監査とコンプライアンス → デプロイ
+- **リファレンス層** —— [binding-spec](./docs/binding-spec.md)（ワイヤ契約の整列仕様）などのエンジニアリング基準。該当サブシステムに手を入れる前の必読文書
 
 ---
 

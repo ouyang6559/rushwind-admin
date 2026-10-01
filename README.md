@@ -146,16 +146,9 @@
 | Docker | 20.0+（本地中间件 / 差分台架） |
 | Node.js + pnpm | 以各前端 `package.json` 的 `engines` 为准（当前约束交集 ≥ 20.19.0），pnpm >= 10.0.0 |
 
-### 同级克隆布局
+### 依赖解析
 
-本仓以相对路径引用兄弟仓，请将以下仓库克隆到**同一父目录**下：
-
-```text
-<parent>/
-├── rushwind-admin/   # 本仓
-├── rushwind/         # RushWind 框架 monorepo（必须）
-└── rust-utils/       # 工具库（必须）
-```
+框架与工具库依赖（RushWind 框架、rust-utils）以 Git 依赖按 revision 钉死，clone 本仓即可构建，无需兄弟仓。仅当需要本地迭代框架仓时，才将 `rushwind/` 克隆到同级目录，并通过 workspace 的 `[patch]` 段临时指向本地路径（框架贡献者工作流）。
 
 ### 后端启动
 
@@ -166,7 +159,7 @@ cargo run -p admin-api   # 二进制 admin-api，监听 REST :7788
 
 - 启动时连接 PostgreSQL 与 Redis，配置位于 `backend/services/admin-api/assets/`（`auth.yaml` / `data.yaml` / `oss.yaml`）
 - `assets/jwt_public_key.pem` 与 `auth.yaml` 内嵌密钥为**演示密钥**，生产部署必须更换
-- SSE（:7789）尚未开放
+- 启动序列：迁移 → 种子 → REST（:7788）+ SSE（:7789，`/events`）+ 任务 worker + cron 四个 transport 一并起
 
 ### 契约同步
 
@@ -296,9 +289,18 @@ rushwind-admin/
 │   │   └── admin-api/              # Admin 服务 crate（src/ 模块树 + assets/ 内嵌资源）
 │   └── testbed/                    # 差分回归台架（compose + admin-diff sweep）
 ├── frontend/                       # 三套前端同步快照（sync-frontend.sh + 双清单门 + RushWind 品牌覆写）
-├── docs/                           # 项目文档（binding-spec / development-plan / operator-matrix / screenshots）
+├── docs/                           # 项目文档（教程 tutorial / 索引 README / binding-spec / development-plan / operator-matrix / screenshots）
 └── .github/workflows/              # CI（fmt / clippy / test / 契约同步门）
 ```
+
+---
+
+## 文档
+
+教程与参考文档体系从 [docs/README.md](./docs/README.md) 进入：
+
+- **教程层**（[docs/tutorial/](./docs/tutorial/README.md)）—— 八章渐进：架构全景 → 从零跑起来 → 契约与生成链路 → 第一个服务模块 → 权限模型 → 多租户与行级隔离 → 审计与等保 → 部署上线
+- **参考层** —— [binding-spec](./docs/binding-spec.md)（线上字节契约基准）等工程档案，动对应子系统前必读
 
 ---
 

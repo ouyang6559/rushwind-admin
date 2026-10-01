@@ -1,0 +1,74 @@
+# 05 · 权限模型
+
+> 前置：[04 第一个服务模块](./04-first-service-module.md)。读完你会理解："谁能看到什么、调到什么"——从一张令牌到一次 403 的完整判定链。
+
+## 1. 鉴权门：一次请求的四阶段
+
+每个门控路由的请求都穿过 `crates/auth::auth_gate` 的四个阶段，任何一阶段失败即终止（认证阶段由框架 crate `rushwind-authn-gate` 承载，租户与授权两阶段在 `crates/auth` 组合）：
+
+| 阶段 | 判什么 | 失败形态 |
+|---|---|---|
+| ① 认证 | JWT RS256 验签 + claims 解析 + Redis 会话检查（未被吊销/拉黑） | 401，两分支：`missing bearer token` / `access token expired` |
+| ② 租户检查 | 租户存在、状态 ON、未到期只读、模块白名单 | 403（见[第 6 章](./06-multi-tenant-isolation.md)） |
+| ③ 授权评估 | authz 引擎判定该操作者能否调该接口 | 403（`missing authz subject` 等） |
+| ④ 放行注入 | claims 注入请求上下文，handler/仓储取用 | — |
+
+两个结构性事实：
+
+- **公开面是白名单制**：只有 `crates/proto/src/auth_free.rs` 登记的 8 个端点免鉴权（登录、验证码、刷新、MFA 挑战、机器令牌交换、找回密码等），其余 203 条全部门控——新路由默认门控，豁免必须显式登记并有守卫测试双向钉住；
+- **绑定先于鉴权**：绑定层在门之外，畸形请求先吃 400（线上契约，见 [binding-spec.md](../binding-spec.md)）。
+
+会话吊销是**服务端事实**：登出、管理端强制下线、改密后，Redis 白名单里的令牌即刻失效——客户端手里的 JWT 未过期也会 401。
+
+## 2. 令牌与声明
+
+RS256 双钥（`auth.yaml` 内嵌演示钥，生产必换，见[第 8 章](./08-deployment.md)）；access 默认 1.5h，refresh 默认 12h。refresh 走**双 Cookie 轮换**：`refresh_token`（HttpOnly）+ `refresh_exp`，`SameSite=Lax`，`Secure` 按部署 TLS 自适应；刷新端点每次轮换出新对。
+
+access 令牌的 claims 就是权限模型的数据载体：
+
+| claim | 含义 | 消费方 |
+|---|---|---|
+| `uid` / `tid` / `ouid` | 用户 / 租户 / 组织单元 | 上下文、租户谓词 |
+| `sub` | 用户名 | 审计归属 |
+| `roc` | 角色编码集 | authz 评估 |
+| `ipa` / `ita` | 平台 / 租户管理员 | 闸门旁路语义 |
+| `ds` / `dss` / `dsu` | 数据范围（五档 + 聚合单元集） | 仓储行过滤（[第 6 章](./06-multi-tenant-isolation.md)） |
+| `hfs` | 字段黑名单（`资源.字段` 列表） | 响应字段裁剪 |
+| `cid` / `did` / `jti` | 客户端 / 设备 / 令牌 ID | 登录策略、会话管理、吊销 |
+
+## 3. 授权评估（authz）
+
+引擎可插拔（`auth.yaml` 的 `authz.type`，当前 `noop`），装配在 `src/authorizer.rs`：
+
+- **判定**：按角色逐个评估、首允即短；无角色直接 403；
+- **反查链**：`(path 模板, method)` → `sys_apis` → `sys_permission_apis` → `sys_roles(code)` → `sys_role_permissions`——策略存 DB，角色改权限即时生效，反查结果带 60s TTL 缓存；
+- **留痕**：每次评估落一行 `sys_policy_evaluation_logs`（评估上下文、trace_id 关联、耗时），排障时可以按请求 ID 追到每一次判定的输赢。
+
+## 4. 菜单、按钮与字段：前端可见性
+
+- **路由与菜单**：`sys_menus` 三类节点（目录/菜单/按钮），菜单行携带路由与组件路径，角色—菜单授权决定登录后看到的导航树；后端对菜单接口本身同样走门控——前端可见性是体验层，**真正的防线始终是接口门**；
+- **按钮权限**：按钮节点的权限标识（如 `sys:user:create`）由前端按令牌权限集控制显隐；
+- **字段级权限**：角色绑定 `sys_role_field_permissions` 黑名单字段，登录时聚合成 `hfs` 声明——服务端响应先裁剪、前端再隐藏，两层同源。
+
+## 5. 身份鉴别的登录侧附加面
+
+登录本身（免鉴权白名单成员）外面套了多层可叠加防线，全部可由平台参数与登录策略控制：
+
+| 防线 | 机制 | 位置 |
+|---|---|---|
+| 图形验证码 | 6 位码、Redis 存答案、`x-captcha-id/-value` 头校验 | `src/captcha.rs` |
+| 登录限流 | Redis Lua：IP + 用户名双维度，5 次失败 / 15 分钟窗 | `src/ratelimit.rs` |
+| 登录策略 | CIDR / 时间窗 / 设备维度限制，命中即拒 | `src/services/login_policy.rs` |
+| MFA（TOTP） | 绑定后登录出挑战，验证通过才发令牌；挑战限时、连败锁定；管理员可救援重置 | `src/services/mfa.rs` |
+| 口令策略 | 复杂度四取三 / 历史复用 / 有效期，阈值走平台参数热调 | 鉴别三件套（[第 7 章](./07-audit-compliance.md)） |
+
+口令**永远不裸传**：前端按约定密钥做 AES 加密后传输，服务端解出后 bcrypt 哈希存储（含恒时假校验防用户枚举）。
+
+## 6. 本章小结
+
+- 判定链四阶段，失败形态分型：认证 401、租户/授权 403；
+- 公开面是白名单制，会话吊销是服务端事实；
+- 令牌 claims 携带全部横向信息（角色、数据范围、字段黑名单），每层各取所需；
+- 登录侧防线层层叠加，阈值热调、行为留痕。
+
+下一步：[06 · 多租户与行级隔离](./06-multi-tenant-isolation.md)。
